@@ -21,8 +21,11 @@ import sys
 # Functions:
 #######################################################################################################
 
+###################################################
+# Loaders:
+###################################################
 
-def loader_all_cadec_folds(repPath, subDatasetType="full"):
+def loader_all_cadec_folds(repPath):
     """
     Description:
     :param repPath:
@@ -47,9 +50,9 @@ def loader_all_cadec_folds(repPath, subDatasetType="full"):
                     exampleId = "cadec_" + "{number:06}".format(number=i)
                     ddd_data[foldFileNameWithoutExt][exampleId] = dict()
 
-                    mention, label = line.split('\t')
+                    mention, cui = line.split('\t')
                     ddd_data[foldFileNameWithoutExt][exampleId]["mention"] = mention
-                    ddd_data[foldFileNameWithoutExt][exampleId]["label"] = label.rstrip()
+                    ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = cui.rstrip()
 
                     i += 1
 
@@ -57,144 +60,85 @@ def loader_all_cadec_folds(repPath, subDatasetType="full"):
 
 
 
-
-
-
-
-
-
-
-#######################################################################################################
-
-
-
-
-
-
-def loader_cadec_one_fold_surface(foldPath):
-    d_data = dict()
-
-    with open(foldPath) as file:
-        for line in file:
-            mention, label = line.split('\t')
-            d_data[mention] = label.rstrip()
-
-    return d_data
-
-
-
-def loader_cadec_one_fold_mention(foldPath):
-    d_data = dict()
-
-    i = 0
-    with open(foldPath) as file:
-        for line in file:
-            exampleId = "cadec_" + "{number:06}".format(number=i)
-            d_data[exampleId] = dict()
-
-            mention, label = line.split('\t')
-            d_data[exampleId]["mention"] = mention
-            d_data[exampleId]["label"] = label.rstrip()
-            i+=1
-
-    return d_data
-
-
-
-
-def loader_all_cadec(repPath, subDatasetType="full"):
+def extract_one_cadec_fold(ddd_data, foldName):
     dd_data = dict()
 
-    i = 0
-    for foldFileName in listdir(repPath):
-        foldFilePath = join(repPath, foldFileName)
-
-        if isfile(foldFilePath):
-
-            # Select all folds (train and test):
-            if subDatasetType == "full":
-                print("Load", foldFileName)
-                with open(foldFilePath) as foldFile:
-
-                    for line in foldFile:
-
-                        s_exampleId = "cadec_"+"{number:06}".format(number=i)
-
-                        dd_data[s_exampleId] = dict()
-                        mention, label = line.split('\t')
-                        dd_data[s_exampleId][mention] = label.rstrip()
-
-                        i += 1
-
-            # Select only folds with "train" or "test" in its name:
-            elif subDatasetType == "train" or subDatasetType == "test":
-
-                if re.match(subDatasetType, foldFileName):
-                    print("Load", foldFileName)
-                    with open(foldFilePath) as foldFile:
-
-                        for line in foldFile:
-                            s_exampleId = "cadec_" + "{number:06}".format(number=i)
-
-                            dd_data[s_exampleId] = dict()
-                            mention, label = line.split('\t')
-                            dd_data[s_exampleId][mention] = label.rstrip()
-
-                            i += 1
+    for fold in ddd_data.keys():
+        if fold == foldName:
+            dd_data = ddd_data[fold] #WARNING: not a deepcopy
 
     return dd_data
 
+###################################################
+# Intrinsic analysers:
+###################################################
+
+
+def get_all_surface_forms(ddd_data):
+    s_surfaceForms = set()
+
+    for fold in ddd_data.keys():
+        for id in ddd_data[fold].keys():
+            s_surfaceForms.add(ddd_data[fold][id]["mention"])
+
+    return s_surfaceForms
+
+
+
+def get_all_used_cui(ddd_data):
+    s_cui = set()
+
+    for fold in ddd_data.keys():
+        for id in ddd_data[fold].keys():
+            s_cui.add(ddd_data[fold][id]["cui"])
+
+    return s_cui
+
+
+
+def get_all_surface_forms_in_fold(dd_data):
+    s_surfaceForms = set()
+    for id in dd_data.keys():
+        s_surfaceForms.add(dd_data[id]["mention"])
+    return s_surfaceForms
+
+def get_all_used_cui_in_fold(dd_data):
+    s_cui = set()
+    for id in dd_data.keys():
+        s_surfaceForms.add(dd_data[id]["cui"])
+    return s_cui
+
+
+###################################################
+# Inter-analysers:
+###################################################
 
 
 
 
-def detailedLoader_all_cadec(repPath, subDatasetType="full"):
+
+###################################################
+# Tools:
+###################################################
+
+def fusion_folds(dd_fold1, dd_fold2):
     dd_data = dict()
 
-    i = 0
-    for foldFileName in listdir(repPath):
-        foldFilePath = join(repPath, foldFileName)
+    for id in dd_fold1.keys():
+        dd_data[id] = dict()
 
-        if isfile(foldFilePath):
+    for id in dd_fold1.keys():
+        dd_data[id]["mention"] = dd_fold1[id]["mention"]
+        dd_data[id]["cui"] = dd_fold1[id]["cui"]
 
-            # Select all folds (train and test):
-            if subDatasetType == "full":
-                print("Load", foldFileName)
-                with open(foldFilePath) as foldFile:
+    for id in dd_fold2.keys():
+        dd_data[id] = dict()
 
-                    for line in foldFile:
-
-                        s_exampleId = "cadec_"+"{number:06}".format(number=i)
-                        mention, label = line.split('\t')
-
-                        dd_data[s_exampleId] = dict()
-                        dd_data[s_exampleId]["mention"] = mention
-                        dd_data[s_exampleId]["label"] = label.rstrip()
-                        dd_data[s_exampleId]["file"] = foldFileName
-
-                        i += 1
-
-            # Select only folds with "train" or "test" in its name:
-            elif subDatasetType == "train" or subDatasetType == "test":
-
-                if re.match(subDatasetType, foldFileName):
-                    print("Load", foldFileName)
-                    with open(foldFilePath) as foldFile:
-
-                        for line in foldFile:
-
-                            s_exampleId = "cadec_" + "{number:06}".format(number=i)
-                            mention, label = line.split('\t')
-
-                            dd_data[s_exampleId] = dict()
-                            dd_data[s_exampleId]["mention"] = mention
-                            dd_data[s_exampleId]["label"] = label.rstrip()
-                            dd_data[s_exampleId]["file"] = foldFileName
-
-                            i += 1
+    for id in dd_fold2.keys():
+        dd_data[id]["mention"] = dd_fold2[id]["mention"]
+        dd_data[id]["cui"] = dd_fold2[id]["cui"]
 
     return dd_data
-
 
 
 
@@ -206,25 +150,96 @@ if __name__ == '__main__':
 
     ########################
     # Open all folds
+    ########################
 
-    #Option 1: folds data
+    #Option 1: folds data     (#Option 2: train/dev/test data# dd_data)
     ddd_data = loader_all_cadec_folds("../CADEC/2_Custom_folds/")
-    print(ddd_data)
+    print("\nddd_data: ", ddd_data)
+
+    dd_train0 = extract_one_cadec_fold(ddd_data, "train_0")
+    dd_train1 = extract_one_cadec_fold(ddd_data, "train_1")
+    dd_train2 = extract_one_cadec_fold(ddd_data, "train_2")
+    dd_train3 = extract_one_cadec_fold(ddd_data, "train_3")
+    dd_train4 = extract_one_cadec_fold(ddd_data, "train_4")
+
+    dd_test0 = extract_one_cadec_fold(ddd_data, "test_0")
+    dd_test1 = extract_one_cadec_fold(ddd_data, "test_1")
+    dd_test2 = extract_one_cadec_fold(ddd_data, "test_2")
+    dd_test3 = extract_one_cadec_fold(ddd_data, "test_3")
+    dd_test4 = extract_one_cadec_fold(ddd_data, "test_4")
+
+    print("dd_test0:", dd_test0)
 
 
+    print("\n\n")
+    ########################
+    # Intrinsic analysis:
+    ########################
+
+    s_surfaceForms = get_all_surface_forms(ddd_data)
+    print("All surface forms in the whole dataset: ", len(s_surfaceForms), s_surfaceForms)
+
+    s_cui = get_all_used_cui(ddd_data)
+    print("All CUIs used in the whole dataset: ", len(s_cui), s_cui)
 
 
+    print("\n\n")
 
 
+    s_surfaceFormsTrain0 = get_all_surface_forms_in_fold(dd_train0)
+    s_surfaceFormsTrain1 = get_all_surface_forms_in_fold(dd_train1)
+    s_surfaceFormsTrain2 = get_all_surface_forms_in_fold(dd_train2)
+    s_surfaceFormsTrain3 = get_all_surface_forms_in_fold(dd_train3)
+    s_surfaceFormsTrain4 = get_all_surface_forms_in_fold(dd_train4)
 
+    s_surfaceFormsTest0 = get_all_surface_forms_in_fold(dd_test0)
+    s_surfaceFormsTest1 = get_all_surface_forms_in_fold(dd_test1)
+    s_surfaceFormsTest2 = get_all_surface_forms_in_fold(dd_test2)
+    s_surfaceFormsTest3 = get_all_surface_forms_in_fold(dd_test3)
+    s_surfaceFormsTest4 = get_all_surface_forms_in_fold(dd_test4)
+
+    print("All surface forms in the train fold 0 : ", len(s_surfaceFormsTrain0), s_surfaceFormsTrain0)
+    print("All surface forms in the train fold 1 : ", len(s_surfaceFormsTrain1), s_surfaceFormsTrain1)
+    print("All surface forms in the train fold 2 : ", len(s_surfaceFormsTrain2), s_surfaceFormsTrain2)
+    print("All surface forms in the train fold 3 : ", len(s_surfaceFormsTrain3), s_surfaceFormsTrain3)
+    print("All surface forms in the train fold 4 : ", len(s_surfaceFormsTrain4), s_surfaceFormsTrain4)
+
+    print("\nAll surface forms in the test fold 0 : ", len(s_surfaceFormsTest0), s_surfaceFormsTest0)
+    print("All surface forms in the test fold 1 : ", len(s_surfaceFormsTest1), s_surfaceFormsTest1)
+    print("All surface forms in the test fold 2 : ", len(s_surfaceFormsTest2), s_surfaceFormsTest2)
+    print("All surface forms in the test fold 3 : ", len(s_surfaceFormsTest3), s_surfaceFormsTest3)
+    print("All surface forms in the test fold 4 : ", len(s_surfaceFormsTest4), s_surfaceFormsTest4)
+
+
+    print("\n\n")
+
+
+    dd_train_test_0 = fusion_folds(dd_train0, dd_test0)
+    s_surfaceFormsTrainTest0 = get_all_surface_forms_in_fold(dd_train_test_0)
+    print("All surface forms in the train and test folds 0 : ", len(s_surfaceFormsTrainTest0))
+
+    dd_train_test_1 = fusion_folds(dd_train1, dd_test1)
+    s_surfaceFormsTrainTest1 = get_all_surface_forms_in_fold(dd_train_test_1)
+    print("All surface forms in the train and test folds 1 : ", len(s_surfaceFormsTrainTest1))
+
+    dd_train_test_2 = fusion_folds(dd_train2, dd_test2)
+    s_surfaceFormsTrainTest2 = get_all_surface_forms_in_fold(dd_train_test_2)
+    print("All surface forms in the train and test folds 2 : ", len(s_surfaceFormsTrainTest2))
+
+    dd_train_test_3 = fusion_folds(dd_train3, dd_test3)
+    s_surfaceFormsTrainTest3 = get_all_surface_forms_in_fold(dd_train_test_3)
+    print("All surface forms in the train and test folds 3 : ", len(s_surfaceFormsTrainTest3))
+
+    dd_train_test_4 = fusion_folds(dd_train4, dd_test4)
+    s_surfaceFormsTrainTest4 = get_all_surface_forms_in_fold(dd_train_test_4)
+    print("All surface forms in the train and test folds 4 : ", len(s_surfaceFormsTrainTest4))
 
 
     sys.exit(0)
 
 
 
-    #Option 2: train/dev/test data
-    # dd_data
+
 
     ########################
 
