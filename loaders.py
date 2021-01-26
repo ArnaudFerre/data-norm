@@ -205,7 +205,50 @@ def get_unique_surface_forms(d_freqSurfaceForms):
 
 #########################
 
+def get_average_number_mentions_per_concept(dd_data):
+    nb = 0
 
+    dl_mentionsPerConcept = dict()
+
+    for id in dd_data.keys():
+        concept = dd_data[id]["cui"]
+        dl_mentionsPerConcept[concept] = list()
+
+    for id in dd_data.keys():
+        mention = dd_data[id]["mention"]
+        concept = dd_data[id]["cui"]
+        dl_mentionsPerConcept[concept].append(mention)
+
+    for concept in dl_mentionsPerConcept.keys():
+        nb += len(dl_mentionsPerConcept[concept])
+
+    nb = (1.0*nb) / len(dl_mentionsPerConcept.keys())
+
+    return nb
+
+
+def get_average_number_mentions_per_concept_in_whole(ddd_data):
+    nb = 0
+
+    dl_mentionsPerConcept = dict()
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            concept = ddd_data[foldName][id]["cui"]
+            dl_mentionsPerConcept[concept] = list()
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            mention = ddd_data[foldName][id]["mention"]
+            concept = ddd_data[foldName][id]["cui"]
+            dl_mentionsPerConcept[concept].append(mention)
+
+    for concept in dl_mentionsPerConcept.keys():
+        nb += len(dl_mentionsPerConcept[concept])
+
+    nb = (1.0*nb) / len(dl_mentionsPerConcept.keys())
+
+    return nb
 
 
 ###################################################
@@ -476,6 +519,35 @@ if __name__ == '__main__':
 
 
     print("Average number of mentions per concepts:\n")
+    print("Number of of mentions per concepts in the whole dataset: ", get_average_number_mentions_per_concept_in_whole(ddd_data))
+
+    print("\nAverage number of mentions per concepts in all train folds:: ", get_average_number_mentions_per_concept(dd_train_data))
+    print("Average number of mentions per concepts in all test folds:: ", get_average_number_mentions_per_concept(dd_test_data))
+
+    print("\nAverage number of mentions per concepts in train+test 0 folds: ", get_average_number_mentions_per_concept(dd_train_test_0))
+    print("Average number of mentions per concepts in the train0 fold: ",get_average_number_mentions_per_concept(dd_train0))
+    print("Average number of mentions per concepts in the test0 fold: ", get_average_number_mentions_per_concept(dd_test0))
+    print("Average number of mentions per concepts in train+test 1 folds: ", get_average_number_mentions_per_concept(dd_train_test_1))
+    print("Average number of mentions per concepts in the train1 fold: ",get_average_number_mentions_per_concept(dd_train1))
+    print("Average number of mentions per concepts  in the test1 fold: ", get_average_number_mentions_per_concept(dd_test1))
+    print("Average number of mentions per concepts in train+test 2 folds: ", get_average_number_mentions_per_concept(dd_train_test_2))
+    print("Average number of mentions per concepts in the train2 fold: ",get_average_number_mentions_per_concept(dd_train2))
+    print("Average number of mentions per concepts in the test2 fold: ", get_average_number_mentions_per_concept(dd_test2))
+    print("Average number of mentions per concepts in train+test 3 folds: ", get_average_number_mentions_per_concept(dd_train_test_3))
+    print("Average number of mentions per concepts in the train3 fold: ",get_average_number_mentions_per_concept(dd_train3))
+    print("Average number of mentions per concepts in the test3 fold: ", get_average_number_mentions_per_concept(dd_test3))
+    print("Average number of mentions per concepts in train+test 4 folds: ", get_average_number_mentions_per_concept(dd_train_test_4))
+    print("Average number of mentions per concepts in the train4 fold: ",get_average_number_mentions_per_concept(dd_train4))
+    print("Average number of mentions per concepts in the test4 fold: ", get_average_number_mentions_per_concept(dd_test4))
+
+
+    print("\n\n")
+
+
+
+
+
+
 
 
 
