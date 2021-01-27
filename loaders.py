@@ -14,6 +14,7 @@ from os import listdir
 from os.path import isfile, join, splitext
 import re
 import sys
+from numpy import std, median
 
 
 
@@ -250,6 +251,112 @@ def get_average_number_mentions_per_concept_in_whole(ddd_data):
 
     return nb
 
+#########################
+
+def get_std_number_mentions_per_concept(dd_data):
+
+    dl_mentionsPerConcept = dict()
+
+    for id in dd_data.keys():
+        concept = dd_data[id]["cui"]
+        dl_mentionsPerConcept[concept] = list()
+
+    for id in dd_data.keys():
+        mention = dd_data[id]["mention"]
+        concept = dd_data[id]["cui"]
+        dl_mentionsPerConcept[concept].append(mention)
+
+    l_values = list()
+    for concept in dl_mentionsPerConcept.keys():
+        l_values.append(len(dl_mentionsPerConcept[concept]))
+
+    std_value = std(l_values)
+    median_value = median(l_values)
+
+    return std_value, median_value
+
+
+def get_std_number_mentions_per_concept_in_whole(ddd_data):
+
+    dl_mentionsPerConcept = dict()
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            concept = ddd_data[foldName][id]["cui"]
+            dl_mentionsPerConcept[concept] = list()
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            mention = ddd_data[foldName][id]["mention"]
+            concept = ddd_data[foldName][id]["cui"]
+            dl_mentionsPerConcept[concept].append(mention)
+
+    l_values = list()
+    for concept in dl_mentionsPerConcept.keys():
+        l_values.append(len(dl_mentionsPerConcept[concept]))
+
+    std_value = std(l_values)
+    median_value = median(l_values)
+
+    return std_value, median_value
+
+#########################
+
+def get_number_of_surface_forms_with_different_labels(dd_data):
+    nbSurfaceForms = 0
+    nbMentions = 0
+
+    ds_surfaceFormsWithLabels = dict()
+    for id in dd_data.keys():
+        surfaceForm = dd_data[id]["mention"]
+        ds_surfaceFormsWithLabels[surfaceForm] = set()
+
+    for id in dd_data.keys():
+        surfaceForm = dd_data[id]["mention"]
+        cui = dd_data[id]["cui"]
+        ds_surfaceFormsWithLabels[surfaceForm].add(cui)
+
+    for surfaceForm in ds_surfaceFormsWithLabels.keys():
+        if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
+            nbSurfaceForms+=1
+
+    for id in dd_data.keys():
+        surfaceForm = dd_data[id]["mention"]
+        if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
+            nbMentions+=1
+
+
+    return nbSurfaceForms, nbMentions
+
+
+
+def get_number_of_surface_forms_with_different_labels_in_whole(ddd_data):
+    nb=0
+    nbMentions = 0
+
+    ds_surfaceFormsWithLabels = dict()
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            surfaceForm = ddd_data[foldName][id]["mention"]
+            ds_surfaceFormsWithLabels[surfaceForm] = set()
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            surfaceForm = ddd_data[foldName][id]["mention"]
+            cui = ddd_data[foldName][id]["cui"]
+            ds_surfaceFormsWithLabels[surfaceForm].add(cui)
+
+    for surfaceForm in ds_surfaceFormsWithLabels.keys():
+        if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
+            nb+=1
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            surfaceForm = ddd_data[foldName][id]["mention"]
+            if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
+                nbMentions+=1
+
+    return nb, nbMentions
 
 ###################################################
 # Inter-analysers:
@@ -541,9 +648,54 @@ if __name__ == '__main__':
     print("Average number of mentions per concepts in the test4 fold: ", get_average_number_mentions_per_concept(dd_test4))
 
 
+    print("Standard deviation and median of mentions per concepts:\n")
+    print("Standard deviation and median of of mentions per concepts in the whole dataset: ", get_std_number_mentions_per_concept_in_whole(ddd_data))
+
+    print("\nStandard deviation and median of mentions per concepts in all train folds:: ", get_std_number_mentions_per_concept(dd_train_data))
+    print("Standard deviation and median of mentions per concepts in all test folds:: ", get_std_number_mentions_per_concept(dd_test_data))
+
+    print("\nStandard deviation and median of mentions per concepts in train+test 0 folds: ", get_std_number_mentions_per_concept(dd_train_test_0))
+    print("Standard deviation and median of mentions per concepts in the train0 fold: ",get_std_number_mentions_per_concept(dd_train0))
+    print("Standard deviation and median of mentions per concepts in the test0 fold: ", get_std_number_mentions_per_concept(dd_test0))
+    print("Standard deviation and median of mentions per concepts in train+test 1 folds: ", get_std_number_mentions_per_concept(dd_train_test_1))
+    print("Standard deviation and median of mentions per concepts in the train1 fold: ",get_std_number_mentions_per_concept(dd_train1))
+    print("Standard deviation and median of mentions per concepts  in the test1 fold: ", get_std_number_mentions_per_concept(dd_test1))
+    print("Standard deviation and median of mentions per concepts in train+test 2 folds: ", get_std_number_mentions_per_concept(dd_train_test_2))
+    print("Standard deviation and median of mentions per concepts in the train2 fold: ",get_std_number_mentions_per_concept(dd_train2))
+    print("Standard deviation and median of mentions per concepts in the test2 fold: ", get_std_number_mentions_per_concept(dd_test2))
+    print("Standard deviation and median of mentions per concepts in train+test 3 folds: ", get_std_number_mentions_per_concept(dd_train_test_3))
+    print("Standard deviation and median of mentions per concepts in the train3 fold: ",get_std_number_mentions_per_concept(dd_train3))
+    print("Standard deviation and median of mentions per concepts in the test3 fold: ", get_std_number_mentions_per_concept(dd_test3))
+    print("Standard deviation and median of mentions per concepts in train+test 4 folds: ", get_std_number_mentions_per_concept(dd_train_test_4))
+    print("Standard deviation and median of mentions per concepts in the train4 fold: ",get_std_number_mentions_per_concept(dd_train4))
+    print("Standard deviation and median of mentions per concepts in the test4 fold: ", get_std_number_mentions_per_concept(dd_test4))
+
+
+
     print("\n\n")
 
 
+    print("How many surface forms have more than one annotating concept (=ambiguity mention) ?\n")
+    print("Number of surface forms with different possible labels in the whole dataset: ", get_number_of_surface_forms_with_different_labels_in_whole(ddd_data))
+
+    print("\nNumber of surface forms with different possible labels in all train folds:: ", get_number_of_surface_forms_with_different_labels(dd_train_data))
+    print("Number of surface forms with different possible labels in all test folds:: ", get_number_of_surface_forms_with_different_labels(dd_test_data))
+
+    print("\nNumber of surface forms with different possible labels in train+test 0 folds: ", get_number_of_surface_forms_with_different_labels(dd_train_test_0))
+    print("Number of surface forms with different possible labels in the train0 fold: ",get_number_of_surface_forms_with_different_labels(dd_train0))
+    print("Number of surface forms with different possible labels in the test0 fold: ", get_number_of_surface_forms_with_different_labels(dd_test0))
+    print("Number of surface forms with different possible labels in train+test 1 folds: ", get_number_of_surface_forms_with_different_labels(dd_train_test_1))
+    print("Number of surface forms with different possible labels in the train1 fold: ",get_number_of_surface_forms_with_different_labels(dd_train1))
+    print("Number of surface forms with different possible labels  in the test1 fold: ", get_number_of_surface_forms_with_different_labels(dd_test1))
+    print("Number of surface forms with different possible labels in train+test 2 folds: ", get_number_of_surface_forms_with_different_labels(dd_train_test_2))
+    print("Number of surface forms with different possible labels in the train2 fold: ",get_number_of_surface_forms_with_different_labels(dd_train2))
+    print("Number of surface forms with different possible labels in the test2 fold: ", get_number_of_surface_forms_with_different_labels(dd_test2))
+    print("Number of surface forms with different possible labels in train+test 3 folds: ", get_number_of_surface_forms_with_different_labels(dd_train_test_3))
+    print("Number of surface forms with different possible labels in the train3 fold: ",get_number_of_surface_forms_with_different_labels(dd_train3))
+    print("Number of surface forms with different possible labels in the test3 fold: ", get_number_of_surface_forms_with_different_labels(dd_test3))
+    print("Number of surface forms with different possible labels in train+test 4 folds: ", get_number_of_surface_forms_with_different_labels(dd_train_test_4))
+    print("Number of surface forms with different possible labels in the train4 fold: ",get_number_of_surface_forms_with_different_labels(dd_train4))
+    print("Number of surface forms with different possible labels in the test4 fold: ", get_number_of_surface_forms_with_different_labels(dd_test4))
 
 
 
