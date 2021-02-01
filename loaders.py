@@ -358,6 +358,53 @@ def get_number_of_surface_forms_with_different_labels_in_whole(ddd_data):
 
     return nb, nbMentions
 
+
+#########################
+
+def get_nb_concepts_with_only_one_mention(dd_data, rate=1):
+    nb=0
+
+    dl_mentionsPerConcept = dict()
+
+    for id in dd_data.keys():
+        cui = dd_data[id]["cui"]
+        dl_mentionsPerConcept[cui] = list()
+
+    for id in dd_data.keys():
+        cui = dd_data[id]["cui"]
+        mention = dd_data[id]["mention"]
+        dl_mentionsPerConcept[cui].append(mention)
+
+    for cui in dl_mentionsPerConcept.keys():
+        if len(dl_mentionsPerConcept[cui]) == rate:
+            nb+=1
+
+    return nb
+
+
+def get_nb_concepts_with_only_one_mention_in_whole(ddd_data, rate=1):
+    nb=0
+
+    dl_mentionsPerConcept = dict()
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            cui = ddd_data[foldName][id]["cui"]
+            dl_mentionsPerConcept[cui] = list()
+
+    for foldName in ddd_data.keys():
+        for id in ddd_data[foldName].keys():
+            cui = ddd_data[foldName][id]["cui"]
+            mention = ddd_data[foldName][id]["mention"]
+            dl_mentionsPerConcept[cui].append(mention)
+
+
+    for cui in dl_mentionsPerConcept.keys():
+        if len(dl_mentionsPerConcept[cui]) == rate:
+            nb+=1
+
+    return nb
+
 ###################################################
 # Inter-analysers:
 ###################################################
@@ -671,6 +718,31 @@ if __name__ == '__main__':
     print("Standard deviation and median of mentions per concepts in the test4 fold: ", get_std_number_mentions_per_concept(dd_test4))
 
 
+    print("\n\n")
+
+
+    print("Single shot situation?\n")
+    print("Number concepts with only one mention in the whole dataset: ", get_nb_concepts_with_only_one_mention_in_whole(ddd_data))
+
+    print("\nNumber concepts with only one mention in all train folds:: ", get_nb_concepts_with_only_one_mention(dd_train_data))
+    print("Number concepts with only one mention in all test folds:: ", get_nb_concepts_with_only_one_mention(dd_test_data))
+
+    print("\nNumber concepts with only one mention in train+test 0 folds: ", get_nb_concepts_with_only_one_mention(dd_train_test_0))
+    print("Number concepts with only one mention in the train0 fold: ",get_nb_concepts_with_only_one_mention(dd_train0))
+    print("Number concepts with only one mention in the test0 fold: ", get_nb_concepts_with_only_one_mention(dd_test0))
+    print("Number concepts with only one mention in train+test 1 folds: ", get_nb_concepts_with_only_one_mention(dd_train_test_1))
+    print("Number concepts with only one mention in the train1 fold: ",get_nb_concepts_with_only_one_mention(dd_train1))
+    print("Number concepts with only one mention  in the test1 fold: ", get_nb_concepts_with_only_one_mention(dd_test1))
+    print("Number concepts with only one mention in train+test 2 folds: ", get_nb_concepts_with_only_one_mention(dd_train_test_2))
+    print("Number concepts with only one mention in the train2 fold: ",get_nb_concepts_with_only_one_mention(dd_train2))
+    print("Number concepts with only one mention in the test2 fold: ", get_nb_concepts_with_only_one_mention(dd_test2))
+    print("Number concepts with only one mention in train+test 3 folds: ", get_nb_concepts_with_only_one_mention(dd_train_test_3))
+    print("Number concepts with only one mention in the train3 fold: ",get_nb_concepts_with_only_one_mention(dd_train3))
+    print("Number concepts with only one mention in the test3 fold: ", get_nb_concepts_with_only_one_mention(dd_test3))
+    print("Number concepts with only one mention in train+test 4 folds: ", get_nb_concepts_with_only_one_mention(dd_train_test_4))
+    print("Number concepts with only one mention in the train4 fold: ",get_nb_concepts_with_only_one_mention(dd_train4))
+    print("Number concepts with only one mention in the test4 fold: ", get_nb_concepts_with_only_one_mention(dd_test4))
+
 
     print("\n\n")
 
@@ -698,205 +770,10 @@ if __name__ == '__main__':
     print("Number of surface forms with different possible labels in the test4 fold: ", get_number_of_surface_forms_with_different_labels(dd_test4))
 
 
-
-
-
-
-
-
-
-    sys.exit(0)
-
-
-
-
-
+    print("\n\n")
     ########################
-
-    m=str(1)
-
-    foldPath = "../CADEC/2_Custom_folds/test_"+m+".csv"
-    print("load: ", foldPath)
-    dd_data_test = loader_cadec_one_fold_mention(foldPath)
-    print(len(dd_data_test.keys()), dd_data_test)
-
-
-    foldPath = "../CADEC/2_Custom_folds/train_"+m+".csv"
-    print("load: ", foldPath)
-    dd_data_train = loader_cadec_one_fold_mention(foldPath)
-    print(len(dd_data_train.keys()), dd_data_train)
-
-
-
-
-
-
-
-
-
+    # Extrinsic analysis:
     ########################
-    #dd_data_train = dd_data_test
-    ########################
-
-
-
-
-    print("\n\n")
-
-
-    s_labels = set()
-    for id in dd_data_train.keys():
-        s_labels.add(dd_data_train[id]["label"])
-    print("Nb labels: ", len(s_labels))
-
-
-    print("\n\n")
-
-
-    s_surfaceForms = set()
-    for id in dd_data_train.keys():
-        if dd_data_train[id]["mention"] not in s_surfaceForms:
-            s_surfaceForms.add(dd_data_train[id]["mention"])
-
-    print("Nb formes de surface: ", len(s_surfaceForms))
-
-
-    print("\n\n")
-
-
-    k=0
-    for id in dd_data_train.keys():
-        mention = dd_data_train[id]["mention"]
-        label = dd_data_train[id]["label"]
-
-        for idTest in dd_data_test.keys():
-            if dd_data_test[idTest]["mention"] == mention:# and dd_data_test[idTest]["label"] == label:
-                k+=1
-                break
-
-
-    print("recouvrement train/test: ", k)
-
-
-    print("\n\n")
-
-
-    d_surfaceCount = dict()
-    for id in dd_data_train.keys():
-        surface = dd_data_train[id]["mention"]
-        d_surfaceCount[surface] = 0
-    for id in dd_data_train.keys():
-        surface = dd_data_train[id]["mention"]
-        d_surfaceCount[surface] += 1
-
-    cmpt = 0
-    for surface in d_surfaceCount.keys():
-        if d_surfaceCount[surface] == 1:
-            cmpt += 1
-
-    print("d_surfaceCount: ", d_surfaceCount)
-    print("unique:", cmpt)
-
-
-    print("\n\n")
-
-
-    d_mentionsPerConcepts = dict()
-    for id in dd_data_train.keys():
-        concept = dd_data_train[id]["label"]
-        d_mentionsPerConcepts[concept] = 0
-    for id in dd_data_train.keys():
-        concept = dd_data_train[id]["label"]
-        d_mentionsPerConcepts[concept] += 1
-
-    print("d_mentionsPerConcepts: ", d_mentionsPerConcepts)
-
-    mean = 0
-    for concept in d_mentionsPerConcepts.keys():
-        mean += d_mentionsPerConcepts[concept]
-    mean = (1.0*mean) / len(d_mentionsPerConcepts)
-
-    print("avg: ", mean)
-
-
-    print("\n\n")
-
-
-    d_surfacesToConcepts = dict()
-    for id in dd_data_train.keys():
-        mention = dd_data_train[id]["mention"]
-        d_surfacesToConcepts[mention] = dict()
-        d_surfacesToConcepts[mention]["set"] = set()
-        d_surfacesToConcepts[mention]["labelsCount"] = 0
-    for id in dd_data_train.keys():
-        mention = dd_data_train[id]["mention"]
-        label = dd_data_train[id]["label"]
-        d_surfacesToConcepts[mention]["set"].add(label)
-
-    for surface in d_surfacesToConcepts.keys():
-        d_surfacesToConcepts[surface]["labelsCount"] = len(d_surfacesToConcepts[mention]["set"])
-
-    i = 0
-    for surface in d_surfacesToConcepts.keys():
-        if d_surfacesToConcepts[surface]["labelsCount"] > 1:
-            i+=1
-    print("count i: ", i)
-    print(d_surfacesToConcepts)
-
-
-    print("\n\n")
-
-
-    cmptNonUnique = 0
-    i = 0
-    for id1 in dd_data_train.keys():
-        mention = dd_data_train[id1]["mention"]
-        label = dd_data_train[id1]["label"]
-
-        for id2 in dd_data_train.keys():
-            if id1 != id2:
-                if  dd_data_train[id2]["mention"] == mention :
-                    print(mention, label, dd_data_train[id2]["label"])
-                    i+=1
-                    if dd_data_train[id2]["label"] == label:
-                        cmptNonUnique += 1
-
-    print("cmptNonUnique: ", cmptNonUnique)
-    print("i:", i)
-
-
-
-
-    print("\n\n")
-
-    d_data = dict()
-    i = 0
-    with open("../CADEC/2_Custom_folds/vocab.txt") as file:
-        for line in file:
-            exampleId = "SCT_" + "{number:04}".format(number=i)
-            d_data[exampleId] = dict()
-            d_data[exampleId] = line.rstrip()
-            i += 1
-
-    print(d_data)
-
-
-    s_labels = set()
-    for id in d_data.keys():
-        s_labels.add(d_data[id])
-    print("len(s_labels): ", len(s_labels))
-
-    i=0
-    for id in dd_data_train.keys():
-        if dd_data_train[id]["label"] not in s_labels:
-            print(dd_data_train[id]["label"])
-        else:
-            i+=1
-    print(i)
-
-
-
-
 
 
 
@@ -906,157 +783,5 @@ if __name__ == '__main__':
 
 
     sys.exit(0)
-
-    repPath = "../CADEC/2_Custom_folds/"
-    dd_data_full = loader_all_cadec(repPath)
-    print("Nb of mentions-labels:", len(dd_data_full.keys()))
-
-
-    print("\n\n")
-
-
-    dd_data_train = loader_all_cadec(repPath, "train")
-    print("Nb of mentions-labels:", len(dd_data_train.keys()))
-
-
-    print("\n\n")
-
-
-    dd_data_test = loader_all_cadec(repPath, "test")
-    print("Nb of mentions-labels:", len(dd_data_test.keys()))
-
-
-    print("\n\n")
-
-
-    ############
-    dd_data_tmp = dd_data_train # dd_data_test #  dd_data_full #  dd_data_test #
-    print("dd_data_tmp:",dd_data_tmp)
-    ############
-
-
-    print("\n\n")
-
-
-    # Unique mentions:
-
-    d_uniqueData = dict()
-    for id in dd_data_tmp.keys():
-        for mention in dd_data_tmp[id].keys():
-            d_uniqueData[mention] = list()
-
-    for id in dd_data_tmp.keys():
-        for mention in dd_data_tmp[id].keys():
-            d_uniqueData[mention].append(dd_data_tmp[id][mention])
-
-    print("d_uniqueData: ", d_uniqueData)
-
-    j = 0
-    for mention in d_uniqueData.keys():
-        if len(d_uniqueData[mention]) > 1:
-            j+=1
-    print(j)
-
-    print("Nb of surface forms:", len(d_uniqueData.keys()))
-
-
-    print("\n\n")
-
-
-    d_surfaceFormsCount = dict()
-    for id in dd_data_tmp.keys():
-        for mention in dd_data_tmp[id].keys():
-            d_surfaceFormsCount[mention] = 0
-    for id in dd_data_tmp.keys():
-        for mention in dd_data_tmp[id].keys():
-            d_surfaceFormsCount[mention] += 1
-
-    print("d_surfaceFormsCount:",d_surfaceFormsCount)
-
-    uniqueSF = 0
-    for mention in d_surfaceFormsCount.keys():
-        if d_surfaceFormsCount[mention] !=5:
-            print(mention)
-            uniqueSF += 1
-    print("Nb of unique surface forms:", uniqueSF)
-
-
-    print("\n\n")
-
-
-    # Create the reference:
-    d_concepts = dict()
-    s_concepts = set()
-    for id in dd_data_tmp.keys():
-        for mention in dd_data_tmp[id].keys():
-            s_concepts.add(dd_data_tmp[id][mention])
-            d_concepts[dd_data_tmp[id][mention]] = 0
-
-    for id in dd_data_tmp.keys():
-        for mention in dd_data_tmp[id].keys():
-            d_concepts[dd_data_tmp[id][mention]] += 1
-
-    print(d_concepts)
-    print(len(s_concepts), s_concepts)
-    print("Nb de concepts utilises:",len(d_concepts))
-
-
-    max = 0
-    for label in d_concepts.keys():
-        if d_concepts[label] > max:
-            max = d_concepts[label]
-    print("max=", max)
-
-
-    mean = 0
-    for label in d_concepts.keys():
-        mean += d_concepts[label]
-    mean = (1.0*mean) / len(d_concepts)
-    print("mean=",mean)
-
-
-    print("\n\n")
-
-
-    # Nb of different labels per mention:
-    print("Surface forms with different labels:")
-    d_dictTmp = dict()
-    for mention in d_uniqueData.keys():
-        d_dictTmp[mention] = len(set(d_uniqueData[mention]))
-        if d_dictTmp[mention] > 1:
-            print(mention, set(d_uniqueData[mention]))
-
-
-    print("\n\n")
-
-
-    print("NIL?")
-    for id in dd_data_full.keys():
-        for mention in dd_data_full[id].keys():
-            try:
-                label1, label2 = dd_data_full[id][mention].split('\t')
-                print(mention)
-            except:
-                pass
-
-
-    print("----------------------------\n\n--------------------------")
-
-
-    dd_data_full = detailedLoader_all_cadec(repPath)
-    #print(dd_data_full)
-
-    d_surfaceFormsCount = dict()
-    for id in dd_data_full.keys():
-        d_surfaceFormsCount[dd_data_full[id]["mention"]] = 0
-    for id in dd_data_full.keys():
-        d_surfaceFormsCount[dd_data_full[id]["mention"]] += 1
-    print(d_surfaceFormsCount)
-
-    j=0
-    for mention in d_surfaceFormsCount.keys():
-        if d_surfaceFormsCount[mention] == 1:
-            j+=1
-    print(j)
 
 
