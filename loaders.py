@@ -70,6 +70,79 @@ def extract_one_cadec_fold(ddd_data, foldName):
 
     return dd_data
 
+
+#########################
+
+
+def loader_one_bb4_fold(repPath):
+    """
+    Description: WARNING: OK only if A1 file is read before its A2 file.
+    :param repPath:
+    :return:
+    """
+
+    ddd_data = dict()
+
+    i = 0
+    for fileName in listdir(repPath):
+        filePath = join(repPath, fileName)
+
+        if isfile(filePath):
+
+            fileNameWithoutExt, ext = splitext(fileName)
+
+            if ext == ".a1":
+
+                with open(filePath, encoding="utf8") as file:
+
+                    if fileNameWithoutExt not in ddd_data.keys():
+
+                        ddd_data[fileNameWithoutExt] = dict()
+                        for line in file:
+
+                            l_line = line.split('\t')
+
+                            if l_line[1].split(' ')[0] == "Title" or l_line[1].split(' ')[0] == "Paragraph":
+                                pass
+                            else:
+                                exampleId = "bb4_" + "{number:06}".format(number=i)
+
+                                ddd_data[fileNameWithoutExt][exampleId] = dict()
+
+                                ddd_data[fileNameWithoutExt][exampleId]["T"] = l_line[0]
+                                ddd_data[fileNameWithoutExt][exampleId]["type"] = l_line[1].split(' ')[0]
+                                ddd_data[fileNameWithoutExt][exampleId]["mention"] = l_line[2].rstrip()
+
+                                i += 1
+
+
+            elif ext == ".a2":
+
+                with open(filePath, encoding="utf8") as file:
+
+                    if fileNameWithoutExt in ddd_data.keys():
+
+                        for line in file:
+                            l_line = line.split('\t')
+
+                            l_info = l_line[1].split(' ')
+                            Tvalue = l_info[1].split(':')[1]
+
+                            for id in ddd_data[fileNameWithoutExt].keys():
+                                if ddd_data[fileNameWithoutExt][id]["T"] == Tvalue :
+                                    if ddd_data[fileNameWithoutExt][id]["type"] == "Habitat" or ddd_data[fileNameWithoutExt][id]["type"] == "Phenotype":
+                                        cui = l_info[2].split(':')[2].rstrip()
+                                        ddd_data[fileNameWithoutExt][id]["cui"] = cui
+                                    elif ddd_data[fileNameWithoutExt][id]["type"] == "Microorganism":
+                                        cui = l_info[2].split(':')[1].rstrip()
+                                        ddd_data[fileNameWithoutExt][id]["cui"] = cui
+
+
+    return ddd_data
+
+
+
+
 ###################################################
 # Intrinsic analysers:
 ###################################################
@@ -437,6 +510,12 @@ def fusion_folds(l_dd_folds):
 # Test section
 #######################################################################################################
 if __name__ == '__main__':
+
+
+
+    ddd_data = loader_one_bb4_fold("../BB4/BioNLP-OST-2019_BB-norm_train")
+    print(ddd_data)
+    sys.exit(0)
 
 
     ########################
