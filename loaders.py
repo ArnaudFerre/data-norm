@@ -74,7 +74,7 @@ def extract_one_cadec_fold(ddd_data, foldName):
 #########################
 
 
-def loader_one_bb4_fold(repPath):
+def loader_one_bb4_fold(l_repPath):
     """
     Description: WARNING: OK only if A1 file is read before its A2 file.
     :param repPath:
@@ -84,61 +84,75 @@ def loader_one_bb4_fold(repPath):
     ddd_data = dict()
 
     i = 0
-    for fileName in listdir(repPath):
-        filePath = join(repPath, fileName)
+    for repPath in l_repPath:
 
-        if isfile(filePath):
+        for fileName in listdir(repPath):
+            filePath = join(repPath, fileName)
 
-            fileNameWithoutExt, ext = splitext(fileName)
+            if isfile(filePath):
 
-            if ext == ".a1":
+                fileNameWithoutExt, ext = splitext(fileName)
 
-                with open(filePath, encoding="utf8") as file:
+                if ext == ".a1":
 
-                    if fileNameWithoutExt not in ddd_data.keys():
+                    with open(filePath, encoding="utf8") as file:
 
-                        ddd_data[fileNameWithoutExt] = dict()
-                        for line in file:
+                        if fileNameWithoutExt not in ddd_data.keys():
 
-                            l_line = line.split('\t')
+                            ddd_data[fileNameWithoutExt] = dict()
+                            for line in file:
 
-                            if l_line[1].split(' ')[0] == "Title" or l_line[1].split(' ')[0] == "Paragraph":
-                                pass
-                            else:
-                                exampleId = "bb4_" + "{number:06}".format(number=i)
+                                l_line = line.split('\t')
 
-                                ddd_data[fileNameWithoutExt][exampleId] = dict()
+                                if l_line[1].split(' ')[0] == "Title" or l_line[1].split(' ')[0] == "Paragraph":
+                                    pass
+                                else:
+                                    exampleId = "bb4_" + "{number:06}".format(number=i)
 
-                                ddd_data[fileNameWithoutExt][exampleId]["T"] = l_line[0]
-                                ddd_data[fileNameWithoutExt][exampleId]["type"] = l_line[1].split(' ')[0]
-                                ddd_data[fileNameWithoutExt][exampleId]["mention"] = l_line[2].rstrip()
+                                    ddd_data[fileNameWithoutExt][exampleId] = dict()
 
-                                i += 1
+                                    ddd_data[fileNameWithoutExt][exampleId]["T"] = l_line[0]
+                                    ddd_data[fileNameWithoutExt][exampleId]["type"] = l_line[1].split(' ')[0]
+                                    ddd_data[fileNameWithoutExt][exampleId]["mention"] = l_line[2].rstrip()
+
+                                    i += 1
 
 
-            elif ext == ".a2":
+                elif ext == ".a2":
 
-                with open(filePath, encoding="utf8") as file:
+                    with open(filePath, encoding="utf8") as file:
 
-                    if fileNameWithoutExt in ddd_data.keys():
+                        if fileNameWithoutExt in ddd_data.keys():
 
-                        for line in file:
-                            l_line = line.split('\t')
+                            for line in file:
+                                l_line = line.split('\t')
 
-                            l_info = l_line[1].split(' ')
-                            Tvalue = l_info[1].split(':')[1]
+                                l_info = l_line[1].split(' ')
+                                Tvalue = l_info[1].split(':')[1]
 
-                            for id in ddd_data[fileNameWithoutExt].keys():
-                                if ddd_data[fileNameWithoutExt][id]["T"] == Tvalue :
-                                    if ddd_data[fileNameWithoutExt][id]["type"] == "Habitat" or ddd_data[fileNameWithoutExt][id]["type"] == "Phenotype":
-                                        cui = l_info[2].split(':')[2].rstrip()
-                                        ddd_data[fileNameWithoutExt][id]["cui"] = cui
-                                    elif ddd_data[fileNameWithoutExt][id]["type"] == "Microorganism":
-                                        cui = l_info[2].split(':')[1].rstrip()
-                                        ddd_data[fileNameWithoutExt][id]["cui"] = cui
+                                for id in ddd_data[fileNameWithoutExt].keys():
+                                    if ddd_data[fileNameWithoutExt][id]["T"] == Tvalue :
+                                        if ddd_data[fileNameWithoutExt][id]["type"] == "Habitat" or ddd_data[fileNameWithoutExt][id]["type"] == "Phenotype":
+                                            cui = l_info[2].split(':')[2].rstrip()
+                                            ddd_data[fileNameWithoutExt][id]["cui"] = cui
+                                        elif ddd_data[fileNameWithoutExt][id]["type"] == "Microorganism":
+                                            cui = l_info[2].split(':')[1].rstrip()
+                                            ddd_data[fileNameWithoutExt][id]["cui"] = cui
 
 
     return ddd_data
+
+
+
+def extract_data(ddd_data, l_type=[]):
+    dd_data = dict()
+
+    for fileName in ddd_data.keys():
+        for id in ddd_data[fileName].keys():
+            if ddd_data[fileName][id]["type"] in l_type:
+                dd_data[id] = ddd_data[fileName][id]
+
+    return dd_data
 
 
 
@@ -481,9 +495,69 @@ def get_nb_concepts_with_only_one_mention_in_whole(ddd_data, rate=1):
 ###################################################
 # Inter-analysers:
 ###################################################
+# List of all id of examples in test which can be seen in train:
+def get_same_examples_from_test_in_train(dd_dataTrain, dd_dataTest):
+    l_sameExamples = list()
+    d_examplesFromTestInTrain = dict()
+
+    for idTest in dd_dataTest.keys():
+        mention = dd_dataTest[idTest]["mention"]
+        cui = dd_dataTest[idTest]["cui"]
+        for idTrain in dd_dataTrain.keys():
+            if dd_dataTrain[idTrain]["mention"] == mention and dd_dataTrain[idTrain]["cui"] == cui:
+                d_examplesFromTestInTrain[idTest] = dict()
+                d_examplesFromTestInTrain[idTest]["mention"] = mention
+                d_examplesFromTestInTrain[idTest]["idExamplesTrain"] = list()
+
+
+    for idTest in dd_dataTest.keys():
+        mention = dd_dataTest[idTest]["mention"]
+        cui = dd_dataTest[idTest]["cui"]
+        for idTrain in dd_dataTrain.keys():
+            if dd_dataTrain[idTrain]["mention"] == mention and dd_dataTrain[idTrain]["cui"] == cui:
+                d_examplesFromTestInTrain[idTest]["mention"] = mention
+                d_examplesFromTestInTrain[idTest]["idExamplesTrain"].append(idTrain)
+
+    return d_examplesFromTestInTrain
+
+
+def get_mentions_from_test_in_train(dd_dataTrain, dd_dataTest):
+    d_mentionsFromTestInTrain = dict()
+
+    for idTest in dd_dataTest.keys():
+        mention = dd_dataTest[idTest]["mention"]
+        for idTrain in dd_dataTrain.keys():
+            if dd_dataTrain[idTrain]["mention"] == mention:
+                d_mentionsFromTestInTrain[idTest] = dict()
+                d_mentionsFromTestInTrain[idTest]["mention"] = mention
+                d_mentionsFromTestInTrain[idTest]["idsTrain"] = list()
+
+    for idTest in d_mentionsFromTestInTrain.keys():
+        for idTrain in dd_dataTrain.keys():
+            if dd_dataTrain[idTrain]["mention"] == d_mentionsFromTestInTrain[idTest]["mention"]:
+                d_mentionsFromTestInTrain[idTest]["idsTrain"].append(idTrain)
+
+    return d_mentionsFromTestInTrain
 
 
 
+def get_surface_forms_from_test_in_train(dd_dataTrain, dd_dataTest):
+    d_surfaceFormsFromTestInTrain = dict()
+
+    for idTest in dd_dataTest.keys():
+        mention = dd_dataTest[idTest]["mention"]
+        for idTrain in dd_dataTrain.keys():
+            if dd_dataTrain[idTrain]["mention"] == mention:
+                d_surfaceFormsFromTestInTrain[mention] = dict()
+                d_surfaceFormsFromTestInTrain[mention]["idTest"] = idTest
+                d_surfaceFormsFromTestInTrain[mention]["idsTrain"] = list()
+
+    for surfaceForm in d_surfaceFormsFromTestInTrain.keys():
+        for idTrain in dd_dataTrain.keys():
+            if dd_dataTrain[idTrain]["mention"] == surfaceForm:
+                d_surfaceFormsFromTestInTrain[surfaceForm]["idsTrain"].append(idTrain)
+
+    return d_surfaceFormsFromTestInTrain
 
 
 ###################################################
@@ -506,16 +580,303 @@ def fusion_folds(l_dd_folds):
 
 
 
+
+###################################################
+# Printers:
+###################################################
+def get_log(dd_train, dd_test, tag1="train", tag2="test"):
+
+    print("\nBeginning of analyis...")
+    print("\nIntra-analysis...")
+
+    # Concepts used
+    s_cui_train = get_all_used_cui_in_fold(dd_train)
+    print("\nAll CUIs used in the "+tag1+" dataset: ", len(s_cui_train))
+    try:
+        s_cui_test = get_all_used_cui_in_fold(dd_test)
+        print("All CUIs used in the "+tag2+" dataset: ", len(s_cui_test))
+    except:
+        print("Non Available data for "+tag2+" dataset.")
+
+    # Number of examples: (WARNING: different from all the examples in the original corpus (because overlapping between folds)
+    print("\nNumber of examples in "+tag1+":", len(dd_train))
+    print("Number of examples in "+tag2+":", len(dd_test))
+
+    print("\nUnique examples:")
+    print("Number of unique examples in "+tag1+":", get_unique_example(get_freq_examples(dd_train)))
+    try:
+        print("Number of unique examples in "+tag2+":", get_unique_example(get_freq_examples(dd_test)))
+    except:
+        print("Non Available data for "+tag2+" dataset.")
+
+    print("\nDistinct examples:")
+    print("Number of distinct examples in "+tag1+":", len(get_distinct_examples(dd_train)))
+    try:
+        print("Number of distinct examples in "+tag2+":", len(get_distinct_examples(dd_test)))
+    except:
+        print("Non Available data for "+tag2+" dataset.")
+
+    print("\nDistinct surface forms:")
+    s_surfaceFormsTrain = get_all_surface_forms_in_fold(dd_train)
+    print("All surface forms in the "+tag1+": ", len(s_surfaceFormsTrain))
+    s_surfaceFormsTest = get_all_surface_forms_in_fold(dd_test)
+    print("All surface forms in the "+tag2+": ", len(s_surfaceFormsTest))
+
+    print("\nUnique surface forms:")
+    print("Nb of unique surface forms in the "+tag1+": ", len(get_unique_surface_forms(get_freq_surface_forms(dd_train))))
+    print("Nb of unique surface forms in the "+tag2+": ", len(get_unique_surface_forms(get_freq_surface_forms(dd_test))))
+
+    print("\nAverage number of mentions per concepts:")
+    print("Average number of mentions per concepts in the "+tag1+": ", get_average_number_mentions_per_concept(dd_train))
+    try:
+        print("Average number of mentions per concepts in the "+tag2+": ", get_average_number_mentions_per_concept(dd_test))
+    except:
+        print("Non Available data for "+tag2+" dataset.")
+
+    print("\nStandard deviation and median of mentions per concepts:")
+    print("Standard deviation and median of mentions per concepts in the "+tag1+": ", get_std_number_mentions_per_concept(dd_train))
+    try:
+        print("Standard deviation and median of mentions per concepts in the "+tag2+": ", get_std_number_mentions_per_concept(dd_test))
+    except:
+        print("Non Available data for "+tag2+" dataset.")
+
+    print("\nSingle shot situation?")
+    print("Number concepts with only one mention in the "+tag1+": ", get_nb_concepts_with_only_one_mention(dd_train))
+    try:
+        print("Number concepts with only one mention in the "+tag2+": ", get_nb_concepts_with_only_one_mention(dd_test))
+    except:
+        print("Non Available data for "+tag2+" dataset.")
+
+    print("\nHow many surface forms have more than one annotating concept (=ambiguity mention) ?")
+    print("Number of surface forms with different possible labels in the "+tag1+": ", get_number_of_surface_forms_with_different_labels(dd_train))
+    try:
+        print("Number of surface forms with different possible labels in the "+tag2+": ", get_number_of_surface_forms_with_different_labels(dd_test))
+    except:
+        print("Non Available data for "+tag2+" dataset.")
+
+
+    print("\nInter-analysis...")
+
+    print("\nIntersection "+tag1+"/"+tag2+":")
+    try:
+        print(len(get_same_examples_from_test_in_train(dd_train, dd_test).keys()))
+    except:
+        print("Non Available because non-available data for "+tag2+" dataset.")
+
+    print("\nNb mentions in "+tag2+" also seen in "+tag1+":", len(get_mentions_from_test_in_train(dd_train, dd_test).keys()))
+
+    print("\nNumber of surface forms from "+tag2+" also present in "+tag1+":", len(get_surface_forms_from_test_in_train(dd_train, dd_test).keys()))
+
+    print("\nNumber of concepts mentioned in "+tag2+" which are mentioned in "+tag1+":")
+    try:
+        nb=0
+        for cui in s_cui_test:
+            if cui in s_cui_train:
+                nb+=1
+        print(nb)
+    except:
+        print("Non Available because non-available data for "+tag2+" dataset.")
+
+    print("\nEnd of analysis.")
+
+
+
+
+
 #######################################################################################################
 # Test section
 #######################################################################################################
 if __name__ == '__main__':
 
+    #######################################################################################################
+    # BB4
+
+    ddd_dataTrain = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train"])
+    ddd_dataDev = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_dev"])
+    ddd_dataTrainDev = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev"])
+    ddd_dataTest = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_test"])
+    ddd_dataAll = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev", "../BB4/BioNLP-OST-2019_BB-norm_test"])
+
+    dd_habTrain = extract_data(ddd_dataTrain, l_type=["Habitat"])
+    dd_habDev = extract_data(ddd_dataDev, l_type=["Habitat"])
+    dd_habTrainDev = extract_data(ddd_dataTrainDev, l_type=["Habitat"])
+    dd_habTest = extract_data(ddd_dataTest, l_type=["Habitat"])
+    dd_habAll = extract_data(ddd_dataAll, l_type=["Habitat"])
+    print(dd_habTrain)
+    print(dd_habTest)
+
+    from pronto import Ontology
+    onto = Ontology("../BB4/OntoBiotope_BioNLP-OST-2019.obo")
 
 
-    ddd_data = loader_one_bb4_fold("../BB4/BioNLP-OST-2019_BB-norm_train")
-    print(ddd_data)
+
+
+
+    get_log(dd_habTrain, dd_habTest, tag1="train_hab", tag2="test_hab")
+    print("\n\n")
+    get_log(dd_habTrain, dd_habDev, tag1="train_hab", tag2="dev_hab")
+    print("\n\n")
+    get_log(dd_habTrainDev, dd_habTest, tag1="train+dev_hab", tag2="test_hab")
     sys.exit(0)
+
+
+
+
+
+    # Concepts used
+    s_cui_train = get_all_used_cui_in_fold(dd_habTrain)
+    print("All CUIs used in the whole train dataset: ", len(s_cui_train))
+    s_cui_dev = get_all_used_cui_in_fold(dd_habDev)
+    print("All CUIs used in the whole train dataset: ", len(s_cui_dev))
+    s_cui_TrainDev = get_all_used_cui_in_fold(dd_habTrainDev)
+    print("All CUIs used in the whole train dataset: ", len(s_cui_TrainDev))
+
+
+    print("\n\n")
+
+
+    # Number of examples: (WARNING: different from all the examples in the original corpus (because overlapping between folds)
+    print("Number of examples in train:", len(dd_habTrain))
+    print("Number of examples in dev:", len(dd_habDev))
+    print("Number of examples in train+dev:", len(dd_habTrainDev))
+    print("Number of examples in test:", len(dd_habTest))
+    print("Number of examples in all:", len(dd_habAll))
+
+
+    print("\n\n")
+
+
+    print("Unique examples:\n")
+    print("Number of unique examples in train:", get_unique_example(get_freq_examples(dd_habTrain)))
+    print("Number of unique examples in dev:", get_unique_example(get_freq_examples(dd_habDev)))
+    print("Number of unique examples in train+dev:", get_unique_example(get_freq_examples(dd_habTrainDev)))
+
+
+    print("\n\n")
+
+
+    print("Distinct examples:\n")
+    print("Number of distinct examples in train:", len(get_distinct_examples(dd_habTrain)))
+    print("Number of distinct examples in dev:", len(get_distinct_examples(dd_habDev)))
+    print("Number of distinct examples in train+dev:", len(get_distinct_examples(dd_habTrainDev)))
+
+
+    print("\n\n")
+
+
+    print("Distinct surface forms:\n")
+    s_surfaceFormsTrain = get_all_surface_forms_in_fold(dd_habTrain)
+    print("All surface forms in the train : ", len(s_surfaceFormsTrain))
+    s_surfaceFormsDev = get_all_surface_forms_in_fold(dd_habDev)
+    print("All surface forms in the dev : ", len(s_surfaceFormsDev))
+    s_surfaceFormsTest = get_all_surface_forms_in_fold(dd_habTest)
+    print("All surface forms in the test : ", len(s_surfaceFormsTest))
+    s_surfaceFormsTrainDev = get_all_surface_forms_in_fold(dd_habTrainDev)
+    print("All surface forms in the train+dev : ", len(s_surfaceFormsTrainDev))
+    s_surfaceFormsAll = get_all_surface_forms_in_fold(dd_habAll)
+    print("All surface forms in all : ", len(s_surfaceFormsAll))
+
+
+    print("\n\n")
+
+    print("Unique surface forms:\n")
+    print("Nb of unique surface forms in the train: ", len(get_unique_surface_forms(get_freq_surface_forms(dd_habTrain))))
+    print("Nb of unique surface forms in the dev: ", len(get_unique_surface_forms(get_freq_surface_forms(dd_habDev))))
+    print("Nb of unique surface forms in the test: ", len(get_unique_surface_forms(get_freq_surface_forms(dd_habTest))))
+    print("Nb of unique surface forms in the train+dev: ", len(get_unique_surface_forms(get_freq_surface_forms(dd_habTrainDev))))
+    print("Nb of unique surface forms in the all: ", len(get_unique_surface_forms(get_freq_surface_forms(dd_habAll))))
+
+
+    print("\n\n")
+
+    print("Average number of mentions per concepts:\n")
+    print("Average number of mentions per concepts in the train: ", get_average_number_mentions_per_concept(dd_habTrain))
+    print("Average number of mentions per concepts in the dev: ", get_average_number_mentions_per_concept(dd_habDev))
+    print("Average number of mentions per concepts in the train+dev: ", get_average_number_mentions_per_concept(dd_habTrainDev))
+
+
+    print("Standard deviation and median of mentions per concepts:\n")
+    print("Standard deviation and median of mentions per concepts in the train: ", get_std_number_mentions_per_concept(dd_habTrain))
+    print("Standard deviation and median of mentions per concepts in the dev: ", get_std_number_mentions_per_concept(dd_habDev))
+    print("Standard deviation and median of mentions per concepts in the train+dev: ", get_std_number_mentions_per_concept(dd_habTrainDev))
+
+
+    print("\n\n")
+
+    print("Single shot situation?\n")
+    print("Number concepts with only one mention in the train: ", get_nb_concepts_with_only_one_mention(dd_habTrain))
+    print("Number concepts with only one mention in the dev: ", get_nb_concepts_with_only_one_mention(dd_habDev))
+    print("Number concepts with only one mention in the train+dev: ", get_nb_concepts_with_only_one_mention(dd_habTrainDev))
+
+
+    print("\n\n")
+
+    print("How many surface forms have more than one annotating concept (=ambiguity mention) ?\n")
+    print("Number of surface forms with different possible labels in the train: ", get_number_of_surface_forms_with_different_labels(dd_habTrain))
+    print("Number of surface forms with different possible labels in the dev: ", get_number_of_surface_forms_with_different_labels(dd_habDev))
+    print("Number of surface forms with different possible labels in the train+dev: ", get_number_of_surface_forms_with_different_labels(dd_habTrainDev))
+
+
+    print("\n\n")
+    ########################
+    print("Extrinsic analysis:")
+    ########################
+
+    print("Intersection train/dev:", len(get_same_examples_from_test_in_train(dd_habTrain, dd_habDev).keys()))
+
+    print("Nb mentions in test also seen in train:", len(get_mentions_from_test_in_train(dd_habTrain, dd_habDev).keys()))
+
+    print("Number of surface forms from dev also present in train:", len(get_surface_forms_from_test_in_train(dd_habTrain, dd_habDev).keys()))
+
+    nb=0
+    for cui in s_cui_dev:
+        if cui in s_cui_train:
+            nb+=1
+    print("Number of concepts mentioned in dev which are mentioned in train", nb)
+
+    sys.exit(0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    sys.exit(0)
+    #######################################################################################################
+    # CADEC
 
 
     ########################
