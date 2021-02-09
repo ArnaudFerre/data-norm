@@ -11,7 +11,7 @@
 
 
 from os import listdir
-from os.path import isfile, join, splitext
+from os.path import isfile, join, splitext, basename
 import re
 import sys
 from numpy import std, median
@@ -155,6 +155,97 @@ def extract_data(ddd_data, l_type=[]):
     return dd_data
 
 
+#########################
+
+
+def loader_one_ncbi_fold(l_foldPath):
+    ddd_data = dict()
+
+    i = 0
+    for foldPath in l_foldPath:
+
+        if isfile(foldPath):
+            with open(foldPath, encoding="utf8") as file:
+
+                fileNameWithoutExt, ext = splitext(basename(foldPath))
+                ddd_data[fileNameWithoutExt] = dict()
+
+                notInDoc = True
+                nextAreMentions = False
+                for line in file:
+
+                    if line == '\n' and nextAreMentions == True and notInDoc == False:
+                        notInDoc = True
+                        nextAreMentions = False
+
+
+                    if nextAreMentions == True and notInDoc == False:
+                        l_line = line.split('\t')
+
+                        exampleId = "ncbi_" + "{number:06}".format(number=i)
+                        ddd_data[fileNameWithoutExt][exampleId] = dict()
+
+                        ddd_data[fileNameWithoutExt][exampleId]["mention"] = l_line[3]
+                        ddd_data[fileNameWithoutExt][exampleId]["type"] = l_line[4]
+
+                        #Parfois une liste de CUIs (des '|' ou des '+'):
+                        cuis = l_line[5].rstrip()
+                        request11 = re.compile('.*\|.*')
+                        request12 = re.compile('.*\+.*')
+                        if request11.match(cuis):
+                            l_cuis = cuis.split('|')
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
+                        elif request12.match(cuis):
+                            l_cuis = cuis.split('+')
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
+                        else:
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = [cuis]
+
+                        i+=1
+
+
+                    request2 = re.compile('^\d*\|a\|')
+                    if nextAreMentions==False and request2.match(line) is not None:
+                        nextAreMentions = True
+
+                    request3 = re.compile('^\d*\|t\|')
+                    if notInDoc==True and request3.match(line) is not None:
+                        notInDoc = False
+
+
+    return ddd_data
+
+
+
+def loader_medic(filePath):
+
+    dd_medic = dict()
+
+    if isfile(filePath):
+        with open(filePath, encoding="utf8") as file:
+
+            for line in file:
+
+                l_line = line.split('\t')
+
+                try:
+                    cui = l_line[1]
+                    if cui == "DiseaseID":
+                        pass
+                    else:
+                        dd_medic[cui]=dict()
+
+                        dd_medic[cui]["label"] = l_line[0]
+                        dd_medic[cui]["alt_cui"] = l_line[2].split('|')
+
+                        dd_medic[cui]["tags"] = l_line[7].rstrip().split('|')
+                        dd_medic[cui]["parents"] = l_line[4].split('|')
+
+                except:
+                    pass
+
+
+    return dd_medic
 
 
 ###################################################
@@ -164,7 +255,8 @@ def extract_data(ddd_data, l_type=[]):
 def get_all_used_cui_in_fold(dd_data):
     s_cui = set()
     for id in dd_data.keys():
-        s_cui.add(dd_data[id]["cui"])
+        for cui in dd_data[id]["cui"]:
+            s_cui.add(cui)
     return s_cui
 
 def get_all_used_cui(ddd_data):
@@ -185,11 +277,14 @@ def get_freq_examples(dd_data):
 
     for id in dd_data.keys():
         surfaceForm = dd_data[id]["mention"]
-        cui = dd_data[id]["cui"]
-        dd_freq_example[surfaceForm][cui] = 0
+        l_cuis = dd_data[id]["cui"]
+        for cui in l_cuis:
+            dd_freq_example[surfaceForm][cui] = 0
 
     for id in dd_data.keys():
-        dd_freq_example[ dd_data[id]["mention"] ][ dd_data[id]["cui"] ] += 1
+        l_cuis = dd_data[id]["cui"]
+        for cui in l_cuis:
+            dd_freq_example[ dd_data[id]["mention"] ][ cui ] += 1
 
     return dd_freq_example
 
@@ -299,13 +394,15 @@ def get_average_number_mentions_per_concept(dd_data):
     dl_mentionsPerConcept = dict()
 
     for id in dd_data.keys():
-        concept = dd_data[id]["cui"]
-        dl_mentionsPerConcept[concept] = list()
+        l_cuis = dd_data[id]["cui"]
+        for concept in l_cuis:
+            dl_mentionsPerConcept[concept] = list()
 
     for id in dd_data.keys():
         mention = dd_data[id]["mention"]
-        concept = dd_data[id]["cui"]
-        dl_mentionsPerConcept[concept].append(mention)
+        l_cuis = dd_data[id]["cui"]
+        for concept in l_cuis:
+            dl_mentionsPerConcept[concept].append(mention)
 
     for concept in dl_mentionsPerConcept.keys():
         nb += len(dl_mentionsPerConcept[concept])
@@ -345,13 +442,15 @@ def get_std_number_mentions_per_concept(dd_data):
     dl_mentionsPerConcept = dict()
 
     for id in dd_data.keys():
-        concept = dd_data[id]["cui"]
-        dl_mentionsPerConcept[concept] = list()
+        l_cuis = dd_data[id]["cui"]
+        for concept in l_cuis:
+            dl_mentionsPerConcept[concept] = list()
 
     for id in dd_data.keys():
         mention = dd_data[id]["mention"]
-        concept = dd_data[id]["cui"]
-        dl_mentionsPerConcept[concept].append(mention)
+        l_cuis = dd_data[id]["cui"]
+        for concept in l_cuis:
+            dl_mentionsPerConcept[concept].append(mention)
 
     l_values = list()
     for concept in dl_mentionsPerConcept.keys():
@@ -400,8 +499,9 @@ def get_number_of_surface_forms_with_different_labels(dd_data):
 
     for id in dd_data.keys():
         surfaceForm = dd_data[id]["mention"]
-        cui = dd_data[id]["cui"]
-        ds_surfaceFormsWithLabels[surfaceForm].add(cui)
+        l_cuis = dd_data[id]["cui"]
+        for cui in l_cuis:
+            ds_surfaceFormsWithLabels[surfaceForm].add(cui)
 
     for surfaceForm in ds_surfaceFormsWithLabels.keys():
         if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
@@ -454,13 +554,15 @@ def get_nb_concepts_with_only_one_mention(dd_data, rate=1):
     dl_mentionsPerConcept = dict()
 
     for id in dd_data.keys():
-        cui = dd_data[id]["cui"]
-        dl_mentionsPerConcept[cui] = list()
+        l_cuis = dd_data[id]["cui"]
+        for cui in l_cuis:
+            dl_mentionsPerConcept[cui] = list()
 
     for id in dd_data.keys():
-        cui = dd_data[id]["cui"]
         mention = dd_data[id]["mention"]
-        dl_mentionsPerConcept[cui].append(mention)
+        l_cuis = dd_data[id]["cui"]
+        for cui in l_cuis:
+            dl_mentionsPerConcept[cui].append(mention)
 
     for cui in dl_mentionsPerConcept.keys():
         if len(dl_mentionsPerConcept[cui]) == rate:
@@ -688,6 +790,82 @@ def get_log(dd_train, dd_test, tag1="train", tag2="test"):
 #######################################################################################################
 if __name__ == '__main__':
 
+
+    #######################################################################################################
+    # NCBI
+
+    dd_medic = loader_medic("../NCBI/CTD_diseases_DNorm_v2012_07_6.tsv")
+    print("Number of concepts in MEDIC (len(dd_medic.keys())):", len(dd_medic.keys()))
+
+    s_medic = set(dd_medic.keys())
+    for cui in dd_medic.keys():
+        for altCui in dd_medic[cui]["alt_cui"]:
+            if len(altCui) > 0:
+                s_medic.add(altCui)
+    print("Number of CUIs in MEDIC (len(s_medic)):", len(s_medic))
+
+    # DiseaseName	DiseaseID	AltDiseaseIDs	Definition	ParentIDs	TreeNumbers	ParentTreeNumbers	Synonyms
+    """
+    j=0
+    for i, cui in enumerate(dd_medic.keys()):
+        if "MESH:C" in dd_medic[cui]["parents"]:
+            print(j,cui, dd_medic[cui])
+            j+=1
+    """
+
+
+    print("\n\n")
+
+
+    ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt"])
+    dd_habTrain = extract_data(ddd_dataTrain, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print(dd_habTrain)
+
+    ddd_dataDev = loader_one_ncbi_fold(["../NCBI/Voff/NCBIdevelopset_corpus.txt"])
+    dd_habDev = extract_data(ddd_dataDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+
+    ddd_dataTest = loader_one_ncbi_fold(["../NCBI/Voff/NCBItestset_corpus.txt"])
+    dd_habTest = extract_data(ddd_dataTest, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+
+    get_log(dd_habTrain, dd_habDev, tag1="train", tag2="dev")
+
+
+
+
+
+
+    print("\n\n")
+
+
+    """
+    # To find possible mentions in corpus with a CUI not in the reference (0 in the train):
+    i=0
+    for id in dd_habTrain.keys():
+        l_cuis = dd_habTrain[id]["cui"]
+
+        for cui in l_cuis:
+            cuiMesh = "MESH:"+str(cui)
+            if cui not in s_medic:
+                if cuiMesh not in s_medic:
+                    print(dd_habTrain[id]["cui"], dd_habTrain[id])
+                    i += 1
+
+    print(i)
+    """
+
+
+    print("\n\n")
+
+
+
+
+
+
+
+    sys.exit(0)
+
+
+
     #######################################################################################################
     # BB4
 
@@ -717,6 +895,10 @@ if __name__ == '__main__':
     get_log(dd_habTrain, dd_habDev, tag1="train_hab", tag2="dev_hab")
     print("\n\n")
     get_log(dd_habTrainDev, dd_habTest, tag1="train+dev_hab", tag2="test_hab")
+
+
+
+
     sys.exit(0)
 
 
