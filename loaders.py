@@ -53,12 +53,11 @@ def loader_all_cadec_folds(repPath):
 
                     mention, cui = line.split('\t')
                     ddd_data[foldFileNameWithoutExt][exampleId]["mention"] = mention
-                    ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = [cui.rstrip()] #No multi-norm in CADEC
+                    ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = [cui.rstrip()] #No multi-norm in CADEC Custom
 
                     i += 1
 
     return ddd_data
-
 
 
 def extract_one_cadec_fold(ddd_data, foldName):
@@ -115,6 +114,9 @@ def loader_one_bb4_fold(l_repPath):
                                     ddd_data[fileNameWithoutExt][exampleId]["type"] = l_line[1].split(' ')[0]
                                     ddd_data[fileNameWithoutExt][exampleId]["mention"] = l_line[2].rstrip()
 
+                                    if "cui" not in ddd_data[fileNameWithoutExt][exampleId].keys():
+                                        ddd_data[fileNameWithoutExt][exampleId]["cui"] = list()
+
                                     i += 1
 
 
@@ -134,25 +136,14 @@ def loader_one_bb4_fold(l_repPath):
                                     if ddd_data[fileNameWithoutExt][id]["T"] == Tvalue :
                                         if ddd_data[fileNameWithoutExt][id]["type"] == "Habitat" or ddd_data[fileNameWithoutExt][id]["type"] == "Phenotype":
                                             cui = l_info[2].split(':')[2].rstrip()
-                                            ddd_data[fileNameWithoutExt][id]["cui"] = cui
+                                            ddd_data[fileNameWithoutExt][id]["cui"].append(cui)
                                         elif ddd_data[fileNameWithoutExt][id]["type"] == "Microorganism":
                                             cui = l_info[2].split(':')[1].rstrip()
-                                            ddd_data[fileNameWithoutExt][id]["cui"] = cui
+                                            ddd_data[fileNameWithoutExt][id]["cui"] = [cui] #No multi-normalization for microorganisms
 
 
     return ddd_data
 
-
-
-def extract_data(ddd_data, l_type=[]):
-    dd_data = dict()
-
-    for fileName in ddd_data.keys():
-        for id in ddd_data[fileName].keys():
-            if ddd_data[fileName][id]["type"] in l_type:
-                dd_data[id] = ddd_data[fileName][id]
-
-    return dd_data
 
 
 #########################
@@ -194,11 +185,16 @@ def loader_one_ncbi_fold(l_foldPath):
                         request12 = re.compile('.*\+.*')
                         if request11.match(cuis):
                             l_cuis = cuis.split('|')
-                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
+
+                            # The first CUI is choose;
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = [l_cuis[0]]
+
+                            # If supplementary CUIs are alternative CUIs (imply a kind of ambiguity...):
+                            ddd_data[fileNameWithoutExt][exampleId]["alt_cui"] = l_cuis[1:]
+
                         elif request12.match(cuis):
-                            l_cuis = cuis.split('+')
+                            l_cuis = cuis.split('+') #multi-normalization
                             ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
-                            ddd_data[fileNameWithoutExt][exampleId]["multi"] = True
                         else:
                             ddd_data[fileNameWithoutExt][exampleId]["cui"] = [cuis]
 
@@ -237,7 +233,8 @@ def loader_medic(filePath):
                         dd_medic[cui]=dict()
 
                         dd_medic[cui]["label"] = l_line[0]
-                        dd_medic[cui]["alt_cui"] = l_line[2].split('|')
+                        if len(l_line[2]) > 0:
+                            dd_medic[cui]["alt_cui"] = l_line[2].split('|')
 
                         dd_medic[cui]["tags"] = l_line[7].rstrip().split('|')
                         dd_medic[cui]["parents"] = l_line[4].split('|')
@@ -696,6 +693,17 @@ def fusion_folds(l_dd_folds):
 
 
 
+def extract_data(ddd_data, l_type=[]):
+    dd_data = dict()
+
+    for fileName in ddd_data.keys():
+        for id in ddd_data[fileName].keys():
+            if ddd_data[fileName][id]["type"] in l_type:
+                dd_data[id] = ddd_data[fileName][id]
+
+    return dd_data
+
+
 
 ###################################################
 # Printers:
@@ -812,7 +820,7 @@ def get_log(dd_train, dd_test, tag1="train", tag2="test"):
 #######################################################################################################
 if __name__ == '__main__':
 
-
+    """
     ################################################
     print("\n\n\n\nCADEC\n")
     ################################################
@@ -850,7 +858,7 @@ if __name__ == '__main__':
     dd_full = fusion_folds([dd_train_test_0, dd_train_test_1, dd_train_test_2, dd_train_test_3, dd_train_test_4])
 
 
-    get_log(dd_full, dd_full, tag1="Full", tag2="Full")
+    get_log(dd_full, dd_test_data, tag1="Full", tag2="all_test")
     print("\n\n")
     get_log(dd_train_data, dd_test_data, tag1="all_train", tag2="all_test")
     print("\n\n")
@@ -863,6 +871,8 @@ if __name__ == '__main__':
     get_log(dd_train3, dd_test3, tag1="train3", tag2="test3")
     print("\n\n")
     get_log(dd_train4, dd_test4, tag1="train4", tag2="test4")
+
+
 
     ################################################
     print("\n\n\n\nBB4")
@@ -891,52 +901,58 @@ if __name__ == '__main__':
     print("\n\n")
     get_log(dd_habTrainDev, dd_habTest, tag1="train+dev_hab", tag2="test_hab")
 
-
+    """
     ################################################
     print("\n\n\n\nNCBI")
     ################################################
 
-    dd_medic = loader_medic("../NCBI/CTD_diseases_DNorm_v2012_07_6.tsv")
-    print("\nNumber of concepts in MEDIC (len(dd_medic.keys())):", len(dd_medic.keys()))
+    dd_medic = loader_medic("../NCBI/FixedVersion/CTD_diseases_DNorm_v2012_07_6_fixed.tsv")
+    nbConcepts = len(dd_medic.keys())
+    print("\nNumber of concepts in MEDIC:", nbConcepts)
 
-    s_medic = set(dd_medic.keys())
-    for cui in dd_medic.keys():
-        for altCui in dd_medic[cui]["alt_cui"]:
-            if len(altCui) > 0:
-                s_medic.add(altCui)
-    print("Number of CUIs in MEDIC (len(s_medic)):", len(s_medic))
-
+    # Fields in MEDIC file:
     # DiseaseName	DiseaseID	AltDiseaseIDs	Definition	ParentIDs	TreeNumbers	ParentTreeNumbers	Synonyms
-    """
-    j=0
-    for i, cui in enumerate(dd_medic.keys()):
-        if "MESH:C" in dd_medic[cui]["parents"]:
-            print(j,cui, dd_medic[cui])
-            j+=1
-    """
+    # In trainset: 2792129	158	178	recurrent meningitis	SpecificDisease	D008581+D012008
+
+    # For initial MEDIC/datasets, some alternative CUIs are used in the corpus...
+    s_medic = set(dd_medic.keys())
+    s_alt = set()
+    s_inter = set()
+    s_both = set(dd_medic.keys())
+    for cui in dd_medic.keys():
+        if "alt_cui" in dd_medic[cui].keys():
+            for altCui in dd_medic[cui]["alt_cui"]:
+                s_both.add(altCui)
+                if altCui not in s_medic:
+                    s_alt.add(altCui)
+                else:
+                    s_inter.add(cui+"/"+altCui)
+
+    print("Number of alternative CUIs in MEDIC:", len(s_alt))
+    print("Number of CUIs in MEDIC (main+alternative)", len(s_both))
+    print("Sibling concepts in MEDIC used in the NCBI dataset:", s_inter)
 
 
     print("\n\n")
 
 
-    ddd_dataFull = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt", "../NCBI/Voff/NCBIdevelopset_corpus.txt", "../NCBI/Voff/NCBItestset_corpus.txt"])
+    ddd_dataFull = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt", "../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
     dd_Full = extract_data(ddd_dataFull, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print(len(dd_Full.keys()))
+    print("Number of examples/mentions in Full dataset: ", len(dd_Full.keys()))
 
-    ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt"])
+    ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt"])
     dd_Train = extract_data(ddd_dataTrain, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print(dd_Train)
     print(len(dd_Train.keys()))
 
-    ddd_dataDev = loader_one_ncbi_fold(["../NCBI/Voff/NCBIdevelopset_corpus.txt"])
+    ddd_dataDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
     dd_Dev = extract_data(ddd_dataDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print(len(dd_Dev.keys()))
 
-    ddd_dataTrainDev = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt", "../NCBI/Voff/NCBIdevelopset_corpus.txt"])
+    ddd_dataTrainDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
     dd_TrainDev = extract_data(ddd_dataTrainDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print(len(dd_TrainDev.keys()))
 
-    ddd_dataTest = loader_one_ncbi_fold(["../NCBI/Voff/NCBItestset_corpus.txt"])
+    ddd_dataTest = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
     dd_Test = extract_data(ddd_dataTest, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print(len(dd_Test.keys()))
 
