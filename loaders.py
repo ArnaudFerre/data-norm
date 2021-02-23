@@ -70,6 +70,197 @@ def extract_one_cadec_fold(ddd_data, foldName):
     return dd_data
 
 
+
+def loader_all_random_cadec_folds(repPath):
+
+    ddd_data = dict()
+
+    i = 0
+    for foldFileName in listdir(repPath):
+        foldFilePath = join(repPath, foldFileName)
+
+        if isfile(foldFilePath):
+
+            print("Load ", foldFileName)
+            with open(foldFilePath) as foldFile:
+
+                foldFileNameWithoutExt = splitext(foldFileName)[0]
+                print(foldFileNameWithoutExt)
+                ddd_data[foldFileNameWithoutExt] = dict()
+
+                for line in foldFile:
+                    exampleId = "cadec_" + "{number:06}".format(number=i)
+                    ddd_data[foldFileNameWithoutExt][exampleId] = dict()
+
+                    cui, label, mention = line.split('\t')
+                    ddd_data[foldFileNameWithoutExt][exampleId]["mention"] = mention.rstrip()
+                    ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = [cui.rstrip()] #No multi-norm in CADEC Random
+                    ddd_data[foldFileNameWithoutExt][exampleId]["label"] = label
+
+                    i += 1
+
+    return ddd_data
+
+
+
+def loader_all_initial_cadec_folds(repPath):
+    """
+    If alternative AND multi CUIs, it doesn't work (but seems it never happens).
+    Idem with CONCEPT_LESS AND a CUI.
+    """
+    ddd_data = dict()
+    k=0
+    i = 0
+    for foldFileName in listdir(repPath):
+        foldFilePath = join(repPath, foldFileName)
+
+        if isfile(foldFilePath):
+
+            print("Load ", foldFileName)
+            with open(foldFilePath) as foldFile:
+
+                foldFileNameWithoutExt = splitext(foldFileName)[0]
+                ddd_data[foldFileNameWithoutExt] = dict()
+
+                for line in foldFile:
+                    exampleId = "initial_cadec_" + "{number:06}".format(number=i)
+                    ddd_data[foldFileNameWithoutExt][exampleId] = dict()
+
+                    l_line = line.split('\t')
+
+                    # NIL cases:
+                    request1 = re.compile('^CONCEPT\_LESS')
+                    if request1.match(l_line[1]):
+                        l_cui = ["CONCEPT_LESS"]
+                        l_label = [None]
+                        mention = l_line[2].rstrip()
+
+                    else:
+                        # Cases where separators '|' are presents:
+                        request2 = re.compile('.*[ ]?\|[ ]?.*')
+                        if request2.match(l_line[1]):
+
+                            # Multi-norm cases:
+                            request3 = re.compile('.*[ ]?\+ [0-9]+.*')
+                            if request3.match(l_line[1]):
+                                l_cui = list()
+                                l_label = list()
+                                l_concepts = l_line[1].split('+') # max 3 concepts it seems
+                                for j, concept in enumerate(l_concepts):
+                                    l_cui.append(concept.split('|')[0].strip())
+                                    l_label.append(concept.split('|')[1].strip())
+                                mention = l_line[2].rstrip()
+
+                            else:
+                                # Alternative CUI cases:
+                                request4 = re.compile('.*\| or [0-9]+.*')
+                                if request4.match(l_line[1]):
+                                    l_cui = [l_line[1].split('|')[0].strip()]
+                                    l_label = [l_line[1].split('|')[1].strip()]
+                                    altCui = l_line[1].split('|')[2].strip()
+                                    altCui = altCui.split("or")[1].strip()
+                                    l_altCui = [altCui]
+                                    ddd_data[foldFileNameWithoutExt][exampleId]["alt_cui"] = l_altCui
+                                    mention = l_line[2].rstrip()
+
+                                # Single-norm cases:
+                                else:
+                                    l_cui = [l_line[1].split('|')[0].strip()]
+                                    l_label = [l_line[1].split('|')[1].strip()]
+                                    mention = l_line[2].rstrip()
+
+                        # Cases where separators '|' are NOT presents:
+                        # (seem to happen just one time in ARTHROTEC.91.ann)
+                        else:
+                            l_cui = [l_line[1].split()[0]]
+                            l_label = [l_line[1].split()[1]]
+                            mention = l_line[2].rstrip()
+
+                    ddd_data[foldFileNameWithoutExt][exampleId]["mention"] = mention
+                    ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = l_cui
+                    ddd_data[foldFileNameWithoutExt][exampleId]["label"] = l_label
+
+                    i += 1
+
+    return ddd_data
+
+
+
+def loader_snomed_ct_au(filePath):
+
+    # Extract IsA from relationships files.
+    # It seems that 116680003 is the typeId of IsA relation (src: https://confluence.ihtsdotools.org/display/DOCGLOSS/relationship+type)
+    # 280844000	71737002
+
+    dd_sct = dict()
+    if isfile(filePath):
+        with open(filePath, encoding="utf8") as file:
+
+            i=0
+            for line in file:
+                l_line = line.split('\t')
+
+                if i > 0: #Not taking into account the first line of the file
+
+                    cui = l_line[4]
+
+                    if l_line[2] == "1":
+                        if cui not in dd_sct.keys():
+                            dd_sct[cui] = dict()
+                            dd_sct[cui]["label"] = l_line[7]
+                            dd_sct[cui]["tags"] = list()
+
+                        else:
+                            dd_sct[cui]["label"] = l_line[7]
+
+
+                    elif l_line[2] == "0":
+
+                        if cui not in dd_sct.keys():
+                            dd_sct[cui] = dict()
+                            dd_sct[cui]["label"] = None
+                            dd_sct[cui]["tags"] = list()
+                            dd_sct[cui]["tags"].append(l_line[7])
+
+                        else:
+                            dd_sct[cui]["tags"].append(l_line[7])
+
+
+                i+=1
+
+    return dd_sct
+
+
+def loader_amt(filePath):
+    dd_sct = dict()
+    if isfile(filePath):
+        with open(filePath, encoding="utf8") as file:
+            i=0
+            for line in file:
+                l_line = line.split('\t')
+                if i > 0: #Not taking into account the first line of the file
+                    cui = l_line[0]
+                    dd_sct[cui] = dict()
+                    dd_sct[cui]["label"] = l_line[2]
+
+                i+=1
+
+    return dd_sct
+
+
+def get_cui_list(filePath):
+    l_cuis = list()
+
+    if isfile(filePath):
+        with open(filePath, encoding="utf8") as file:
+
+            i = 0
+            for line in file:
+                l_cuis.append(line.rstrip())
+
+    return l_cuis
+
+
 #########################
 
 
@@ -249,7 +440,9 @@ def loader_medic(filePath):
 ###################################################
 # Intrinsic analysers:
 ###################################################
-
+###
+# WARNING: Add alternative CUIs here too, I think...
+###
 def get_all_used_cui_in_fold(dd_data):
     s_cui = set()
     for id in dd_data.keys():
@@ -599,11 +792,10 @@ def get_nb_mentions_with_one_concept(dd_data):
     nb=0
 
     for id in dd_data.keys():
-        if "multi" in dd_data[id].keys():
-            if dd_data[id]["multi"]== True:
-                nb+=1
+        if len(dd_data[id]["cui"]) > 1:
+            nb+=1
 
-    return (len(dd_data.keys()) - nb)
+    return (len(dd_data.keys()) - nb), nb
 
 ###################################################
 # Inter-analysers:
@@ -701,6 +893,15 @@ def extract_data(ddd_data, l_type=[]):
             if ddd_data[fileName][id]["type"] in l_type:
                 dd_data[id] = ddd_data[fileName][id]
 
+    return dd_data
+
+
+
+def extract_data_without_file(ddd_data):
+    dd_data = dict()
+    for file in ddd_data.keys():
+        for id in ddd_data[file].keys():
+            dd_data[id] = ddd_data[file][id]
     return dd_data
 
 
@@ -820,10 +1021,169 @@ def get_log(dd_train, dd_test, tag1="train", tag2="test"):
 #######################################################################################################
 if __name__ == '__main__':
 
-    """
+
     ################################################
-    print("\n\n\n\nCADEC\n")
+    print("\n\n\n\nCustom CADEC\n")
     ################################################
+
+    dd_sct = loader_snomed_ct_au("../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release\Snapshot/Terminology/sct2_Description_Snapshot-en-AU_AU1000036_20140531.txt")
+    l_sctFromCadec = get_cui_list("../CADEC/custom_CUI_list.txt")
+
+    print("len(dd_sct):", len(dd_sct), "\nlen(l_sctFromCadec):", len(l_sctFromCadec))
+
+
+    s_nil = set()
+    l_cuis = dd_sct.keys()
+    for cuiCadec in l_sctFromCadec:
+        if cuiCadec not in l_cuis:
+            s_nil.add(cuiCadec)
+
+    print(len(s_nil), s_nil)
+
+
+
+
+    ################################################
+    print("\n\n\n\nRandom CADEC\n")
+    ################################################
+
+    ddd_data = loader_all_random_cadec_folds("../CADEC/1_Random_folds_AskAPatient/")
+    print("\nddd_data built.")
+
+    dd_train0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.train")
+    dd_train1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.train")
+    dd_train2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.train")
+    dd_train3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.train")
+    dd_train4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.train")
+    dd_train5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.train")
+    dd_train6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.train")
+    dd_train7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.train")
+    dd_train8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.train")
+    dd_train9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.train")
+
+    dd_dev0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.validation")
+    dd_dev1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.validation")
+    dd_dev2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.validation")
+    dd_dev3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.validation")
+    dd_dev4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.validation")
+    dd_dev5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.validation")
+    dd_dev6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.validation")
+    dd_dev7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.validation")
+    dd_dev8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.validation")
+    dd_dev9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.validation")
+
+    dd_test0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.test")
+    dd_test1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.test")
+    dd_test2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.test")
+    dd_test3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.test")
+    dd_test4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.test")
+    dd_test5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.test")
+    dd_test6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.test")
+    dd_test7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.test")
+    dd_test8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.test")
+    dd_test9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.test")
+
+    print("Unitary folds built, ex: dd_test0:", dd_test0)
+
+
+    s_cuisInRandomCadec = set()
+    for file in ddd_data.keys():
+        for id in ddd_data[file]:
+            for cui in ddd_data[file][id]["cui"]:
+                s_cuisInRandomCadec.add(cui)
+
+    print("len(s_cuisInRandomCadec):", len(s_cuisInRandomCadec))
+
+
+
+    ################################################
+    print("\n\n\n\nInitial CADEC\n")
+    ################################################
+
+    ddd_data = loader_all_initial_cadec_folds("../CADEC/0_Original_CADEC/AMT-SCT/")
+    dd_cadec = extract_data_without_file(ddd_data)
+
+    print("test ddd_data['ARTHROTEC.32']:", ddd_data["ARTHROTEC.32"])
+
+    s_cuis = set()
+    l_altCuis = list()
+    compt=0
+    cuiLess = 0
+    for file in ddd_data.keys():
+        for id in ddd_data[file].keys():
+            for cui in ddd_data[file][id]["cui"]:
+                s_cuis.add(cui)
+            if "alt_cui" in ddd_data[file][id].keys():
+                for altCui in ddd_data[file][id]["alt_cui"]:
+                    s_cuis.add(altCui)
+                    l_altCuis.append(altCui)
+            if len(ddd_data[file][id]["cui"]) > 1:
+                compt+=1
+            if ddd_data[file][id]["cui"] == ["CONCEPT_LESS"]:
+                cuiLess+=1
+
+    print("len(s_cuis):", len(s_cuis))
+    print("len(l_altCuis):", len(l_altCuis), l_altCuis)
+    print("multi", compt, "cui LSS:", cuiLess)
+
+
+
+
+
+
+    #Load AMT:
+    dd_amt = loader_amt("../CADEC/AMT_v2.56/Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt")
+
+    s_amt = set()
+    for cui in dd_amt.keys():
+        s_amt.add(cui)
+
+    print(len(s_amt), len(dd_amt.keys()))
+
+
+    print("\n\n")
+
+    cmpInSCT=0
+    cmpInAMT = 0
+    conceptLess = 0
+    Nbmentions = 0
+    wtf = 0
+    s1 = set()
+    s2 = set()
+    s3 = set()
+    for file in ddd_data.keys():
+        for id in ddd_data[file].keys():
+            Nbmentions+=1
+            for cui in ddd_data[file][id]["cui"]:
+                if cui in dd_sct.keys() and cui!="CONCEPT_LESS":
+                    cmpInSCT +=1
+                    s1.add(cui)
+                elif cui in dd_amt.keys() and cui!="CONCEPT_LESS":
+                    cmpInAMT +=1
+                    s2.add(cui)
+                elif cui=="CONCEPT_LESS":
+                    conceptLess += 1
+                else:
+                    wtf+=1
+                    s3.add(cui)
+                    print(file, ddd_data[file][id])
+
+
+
+
+    print(cmpInSCT, cmpInAMT, conceptLess, Nbmentions, wtf)
+    print(len(s1), len(s2), len(s3))
+
+
+
+
+    get_log(dd_cadec, dd_cadec, tag1="Full", tag2="Full")
+
+
+
+
+
+    sys.exit(0)
 
     ddd_data = loader_all_cadec_folds("../CADEC/2_Custom_folds/")
     print("\nddd_data built.")
@@ -901,7 +1261,8 @@ if __name__ == '__main__':
     print("\n\n")
     get_log(dd_habTrainDev, dd_habTest, tag1="train+dev_hab", tag2="test_hab")
 
-    """
+
+
     ################################################
     print("\n\n\n\nNCBI")
     ################################################
@@ -942,7 +1303,7 @@ if __name__ == '__main__':
 
     ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt"])
     dd_Train = extract_data(ddd_dataTrain, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print(len(dd_Train.keys()))
+    print(id, len(dd_Train.keys()))
 
     ddd_dataDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
     dd_Dev = extract_data(ddd_dataDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
@@ -963,38 +1324,7 @@ if __name__ == '__main__':
     print("\n\n")
     get_log(dd_Train, dd_Test, tag1="train", tag2="test")
     print("\n\n")
-    get_log(dd_Full, dd_Full, tag1="Full", tag2="Full")
-
-
-
-
-
-
-
-
-    """
-    # To find possible mentions in corpus with a CUI not in the reference (0 in the train):
-    i=0
-    for id in dd_habTrain.keys():
-        l_cuis = dd_habTrain[id]["cui"]
-
-        for cui in l_cuis:
-            cuiMesh = "MESH:"+str(cui)
-            if cui not in s_medic:
-                if cuiMesh not in s_medic:
-                    print(dd_habTrain[id]["cui"], dd_habTrain[id])
-                    i += 1
-
-    print(i)
-    """
-
-
-    print("\n\n")
-
-
-
-
-
+    get_log(dd_Full, dd_Test, tag1="Full", tag2="test")
 
 
     sys.exit(0)
