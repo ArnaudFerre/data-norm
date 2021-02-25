@@ -65,7 +65,7 @@ def exact_matcher(dd_mentions, dd_ref):
     progresssion = -1
 
 
-    for i, id in enumerate(dd_mentions.keys()):
+    for id in dd_mentions.keys():
         dd_predictions[id] = dict()
         dd_predictions[id]["pred_cui"] = []
 

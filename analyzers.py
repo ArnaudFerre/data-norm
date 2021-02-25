@@ -610,4 +610,150 @@ def get_log(dd_train, dd_test, tag1="train", tag2="test"):
 #######################################################################################################
 if __name__ == '__main__':
 
-    print("No test...")
+    ################################################
+    print("\n\n\n\nCustom CADEC\n")
+    ################################################
+
+    from loaders import loader_snomed_ct_au, get_cui_list, loader_all_random_cadec_folds
+
+    dd_sct = loader_snomed_ct_au(
+        "../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release\Snapshot/Terminology/sct2_Description_Snapshot-en-AU_AU1000036_20140531.txt")
+    l_sctFromCadec = get_cui_list("../CADEC/custom_CUI_list.txt")
+
+    print("len(dd_sct):", len(dd_sct), "\nlen(l_sctFromCadec):", len(l_sctFromCadec))
+
+    s_nil = set()
+    l_cuis = dd_sct.keys()
+    for cuiCadec in l_sctFromCadec:
+        if cuiCadec not in l_cuis:
+            s_nil.add(cuiCadec)
+
+    print(len(s_nil), s_nil)
+
+    ################################################
+    print("\n\n\n\nRandom CADEC\n")
+    ################################################
+
+    from loaders import loader_all_random_cadec_folds, extract_one_cadec_fold
+
+    ddd_data = loader_all_random_cadec_folds("../CADEC/1_Random_folds_AskAPatient/")
+    print("\nddd_data built.")
+
+    dd_train0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.train")
+    dd_train1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.train")
+    dd_train2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.train")
+    dd_train3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.train")
+    dd_train4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.train")
+    dd_train5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.train")
+    dd_train6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.train")
+    dd_train7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.train")
+    dd_train8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.train")
+    dd_train9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.train")
+
+    dd_dev0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.validation")
+    dd_dev1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.validation")
+    dd_dev2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.validation")
+    dd_dev3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.validation")
+    dd_dev4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.validation")
+    dd_dev5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.validation")
+    dd_dev6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.validation")
+    dd_dev7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.validation")
+    dd_dev8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.validation")
+    dd_dev9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.validation")
+
+    dd_test0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.test")
+    dd_test1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.test")
+    dd_test2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.test")
+    dd_test3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.test")
+    dd_test4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.test")
+    dd_test5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.test")
+    dd_test6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.test")
+    dd_test7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.test")
+    dd_test8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.test")
+    dd_test9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.test")
+
+    print("Unitary folds built, ex: dd_test0:", dd_test0)
+
+    s_cuisInRandomCadec = set()
+    for file in ddd_data.keys():
+        for id in ddd_data[file]:
+            for cui in ddd_data[file][id]["cui"]:
+                s_cuisInRandomCadec.add(cui)
+
+    print("len(s_cuisInRandomCadec):", len(s_cuisInRandomCadec))
+
+    ################################################
+    print("\n\n\n\nInitial CADEC\n")
+    ################################################
+
+    from loaders import loader_all_initial_cadec_folds, loader_amt
+
+    ddd_data = loader_all_initial_cadec_folds("../CADEC/0_Original_CADEC/AMT-SCT/")
+    dd_cadec = extract_data_without_file(ddd_data)
+
+    print("test ddd_data['ARTHROTEC.32']:", ddd_data["ARTHROTEC.32"])
+
+    s_cuis = set()
+    l_altCuis = list()
+    compt = 0
+    cuiLess = 0
+    for file in ddd_data.keys():
+        for id in ddd_data[file].keys():
+            for cui in ddd_data[file][id]["cui"]:
+                s_cuis.add(cui)
+            if "alt_cui" in ddd_data[file][id].keys():
+                for altCui in ddd_data[file][id]["alt_cui"]:
+                    s_cuis.add(altCui)
+                    l_altCuis.append(altCui)
+            if len(ddd_data[file][id]["cui"]) > 1:
+                compt += 1
+            if ddd_data[file][id]["cui"] == ["CONCEPT_LESS"]:
+                cuiLess += 1
+
+    print("len(s_cuis):", len(s_cuis))
+    print("len(l_altCuis):", len(l_altCuis), l_altCuis)
+    print("multi", compt, "cui LSS:", cuiLess)
+
+    # Load AMT:
+    dd_amt = loader_amt("../CADEC/AMT_v2.56/Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt")
+
+    s_amt = set()
+    for cui in dd_amt.keys():
+        s_amt.add(cui)
+
+    print(len(s_amt), len(dd_amt.keys()))
+
+    print("\n\n")
+
+    cmpInSCT = 0
+    cmpInAMT = 0
+    conceptLess = 0
+    Nbmentions = 0
+    wtf = 0
+    s1 = set()
+    s2 = set()
+    s3 = set()
+    for file in ddd_data.keys():
+        for id in ddd_data[file].keys():
+            Nbmentions += 1
+            for cui in ddd_data[file][id]["cui"]:
+                if cui in dd_sct.keys() and cui != "CONCEPT_LESS":
+                    cmpInSCT += 1
+                    s1.add(cui)
+                elif cui in dd_amt.keys() and cui != "CONCEPT_LESS":
+                    cmpInAMT += 1
+                    s2.add(cui)
+                elif cui == "CONCEPT_LESS":
+                    conceptLess += 1
+                else:
+                    wtf += 1
+                    s3.add(cui)
+                    print(file, ddd_data[file][id])
+
+    print(cmpInSCT, cmpInAMT, conceptLess, Nbmentions, wtf)
+    print(len(s1), len(s2), len(s3))
+
+    get_log(dd_cadec, dd_cadec, tag1="Full", tag2="Full")
+
+
+

@@ -23,10 +23,110 @@ from numpy import std, median
 #######################################################################################################
 
 ###################################################
-# Loaders:
+# Reference loaders:
 ###################################################
 
-def loader_all_cadec_folds(repPath):
+def loader_snomed_ct_au(descriptionFilePath, languageFilePath, l_select=['900000000000207008', '900000000000012004', '32506021000036107', '32570491000036106', '161771000036108'], l_keptActivity=["0","1"]):
+
+    # Extract IsA from relationships files.
+    # It seems that 116680003 is the typeId of IsA relation (src: https://confluence.ihtsdotools.org/display/DOCGLOSS/relationship+type)
+    # 280844000	71737002
+    # moduleId= '900000000000012004', '32506021000036107', '32570491000036106' & 161771000036108 seem to be NOT relevant to CADEC normalization task...
+
+    dd_sct = dict()
+
+    dd_description = dict()
+    with open(descriptionFilePath, encoding="utf8") as file:
+        i=0
+        for line in file:
+
+            if i > 0: #Not taking into account the first line of the file
+                l_line = line.split('\t')
+
+                if l_line[3] in l_select:
+                    if l_line[2] in l_keptActivity:
+
+                        id = l_line[0]
+                        dd_description[id] = dict()
+                        dd_description[id]["term"] = l_line[7]
+                        cui = l_line[4]
+                        dd_description[id]["cui"] = cui
+
+                        dd_sct[cui] = dict()
+                        dd_sct[cui]["tags"] = list()
+
+            i+=1
+
+
+    with open(languageFilePath, encoding="utf8") as file:
+        i = 0
+        for line in file:
+
+            if i > 0:  # Not taking into account the first line of the file
+                l_line = line.split('\t')
+
+                if l_line[2] in l_keptActivity:
+
+                    referencedComponentId = l_line[5]
+                    acceptabilityId = l_line[6].rstrip()
+                    cui = dd_description[referencedComponentId]["cui"]
+
+                    if acceptabilityId == "900000000000548007": #preferred term/label id
+                        dd_sct[cui]["label"] = dd_description[referencedComponentId]["term"]
+
+                    elif acceptabilityId == "900000000000549004": #Acceptable term (i.e. tags/synonyms)
+                        dd_sct[cui]["tags"].append(dd_description[referencedComponentId]["term"])
+
+            i += 1
+
+    # It seems that there are 6 concepts without preferred term/label in this SCT-AU version.
+    # All these 6 have only one tag, so we just swap the label and the tag.
+    for cui in dd_sct.keys():
+        if "label" not in dd_sct[cui].keys():
+            try:
+                dd_sct[cui]["label"] = dd_sct[cui]["tags"][0]
+                dd_sct[cui]["tags"] = []
+            except:
+                print(cui, dd_sct[cui])
+
+    return dd_sct
+
+
+
+
+def loader_amt(filePath):
+
+    s_set = set()
+
+    dd_sct = dict()
+    if isfile(filePath):
+        with open(filePath, encoding="utf8") as file:
+            i=0
+            for line in file:
+                l_line = line.split('\t')
+                if i > 0: #Not taking into account the first line of the file
+
+                    if l_line[1] == "0":
+
+                        request = re.compile('.*concept\).*|.*type\).*|.*\(relationship details\).*|.*\(AU qualifier\).*') # metadata concepts
+                        if request.match(l_line[2]): # metadata concepts
+                            pass
+                        else:
+                            cui = l_line[0]
+                            dd_sct[cui] = dict()
+                            dd_sct[cui]["label"] = l_line[2]
+
+                i+=1
+
+    return dd_sct
+
+
+
+###################################################
+# Corpus loaders:
+###################################################
+
+def loader_all_custom_cadec_folds(repPath):
     """
     Description:
     :param repPath:
@@ -40,8 +140,6 @@ def loader_all_cadec_folds(repPath):
         foldFilePath = join(repPath, foldFileName)
 
         if isfile(foldFilePath):
-
-            print("Load ", foldFileName)
             with open(foldFilePath) as foldFile:
 
                 foldFileNameWithoutExt = splitext(foldFileName)[0]
@@ -80,12 +178,9 @@ def loader_all_random_cadec_folds(repPath):
         foldFilePath = join(repPath, foldFileName)
 
         if isfile(foldFilePath):
-
-            print("Load ", foldFileName)
             with open(foldFilePath) as foldFile:
 
                 foldFileNameWithoutExt = splitext(foldFileName)[0]
-                print(foldFileNameWithoutExt)
                 ddd_data[foldFileNameWithoutExt] = dict()
 
                 for line in foldFile:
@@ -114,138 +209,76 @@ def loader_all_initial_cadec_folds(repPath):
     for foldFileName in listdir(repPath):
         foldFilePath = join(repPath, foldFileName)
 
-        if isfile(foldFilePath):
+        with open(foldFilePath) as foldFile:
 
-            print("Load ", foldFileName)
-            with open(foldFilePath) as foldFile:
+            foldFileNameWithoutExt = splitext(foldFileName)[0]
+            ddd_data[foldFileNameWithoutExt] = dict()
 
-                foldFileNameWithoutExt = splitext(foldFileName)[0]
-                ddd_data[foldFileNameWithoutExt] = dict()
+            for line in foldFile:
+                exampleId = "initial_cadec_" + "{number:06}".format(number=i)
+                ddd_data[foldFileNameWithoutExt][exampleId] = dict()
 
-                for line in foldFile:
-                    exampleId = "initial_cadec_" + "{number:06}".format(number=i)
-                    ddd_data[foldFileNameWithoutExt][exampleId] = dict()
+                l_line = line.split('\t')
 
-                    l_line = line.split('\t')
+                # NIL cases:
+                request1 = re.compile('^CONCEPT\_LESS')
+                if request1.match(l_line[1]):
+                    l_cui = ["CONCEPT_LESS"]
+                    l_label = [None]
+                    mention = l_line[2].rstrip()
 
-                    # NIL cases:
-                    request1 = re.compile('^CONCEPT\_LESS')
-                    if request1.match(l_line[1]):
-                        l_cui = ["CONCEPT_LESS"]
-                        l_label = [None]
-                        mention = l_line[2].rstrip()
+                else:
+                    # Cases where separators '|' are presents:
+                    request2 = re.compile('.*[ ]?\|[ ]?.*')
+                    if request2.match(l_line[1]):
 
-                    else:
-                        # Cases where separators '|' are presents:
-                        request2 = re.compile('.*[ ]?\|[ ]?.*')
-                        if request2.match(l_line[1]):
-
-                            # Multi-norm cases:
-                            request3 = re.compile('.*[ ]?\+ [0-9]+.*')
-                            if request3.match(l_line[1]):
-                                l_cui = list()
-                                l_label = list()
-                                l_concepts = l_line[1].split('+') # max 3 concepts it seems
-                                for j, concept in enumerate(l_concepts):
-                                    l_cui.append(concept.split('|')[0].strip())
-                                    l_label.append(concept.split('|')[1].strip())
-                                mention = l_line[2].rstrip()
-
-                            else:
-                                # Alternative CUI cases:
-                                request4 = re.compile('.*\| or [0-9]+.*')
-                                if request4.match(l_line[1]):
-                                    l_cui = [l_line[1].split('|')[0].strip()]
-                                    l_label = [l_line[1].split('|')[1].strip()]
-                                    altCui = l_line[1].split('|')[2].strip()
-                                    altCui = altCui.split("or")[1].strip()
-                                    l_altCui = [altCui]
-                                    ddd_data[foldFileNameWithoutExt][exampleId]["alt_cui"] = l_altCui
-                                    mention = l_line[2].rstrip()
-
-                                # Single-norm cases:
-                                else:
-                                    l_cui = [l_line[1].split('|')[0].strip()]
-                                    l_label = [l_line[1].split('|')[1].strip()]
-                                    mention = l_line[2].rstrip()
-
-                        # Cases where separators '|' are NOT presents:
-                        # (seem to happen just one time in ARTHROTEC.91.ann)
-                        else:
-                            l_cui = [l_line[1].split()[0]]
-                            l_label = [l_line[1].split()[1]]
+                        # Multi-norm cases:
+                        request3 = re.compile('.*[ ]?\+ [0-9]+.*')
+                        if request3.match(l_line[1]):
+                            l_cui = list()
+                            l_label = list()
+                            l_concepts = l_line[1].split('+') # max 3 concepts it seems
+                            for j, concept in enumerate(l_concepts):
+                                l_cui.append(concept.split('|')[0].strip())
+                                l_label.append(concept.split('|')[1].strip())
                             mention = l_line[2].rstrip()
 
-                    ddd_data[foldFileNameWithoutExt][exampleId]["mention"] = mention
-                    ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = l_cui
-                    ddd_data[foldFileNameWithoutExt][exampleId]["label"] = l_label
+                        else:
+                            # Alternative CUI cases:
+                            request4 = re.compile('.*\| or [0-9]+.*')
+                            if request4.match(l_line[1]):
+                                l_cui = [l_line[1].split('|')[0].strip()]
+                                l_label = [l_line[1].split('|')[1].strip()]
+                                altCui = l_line[1].split('|')[2].strip()
+                                altCui = altCui.split("or")[1].strip()
+                                l_altCui = [altCui]
+                                ddd_data[foldFileNameWithoutExt][exampleId]["alt_cui"] = l_altCui
+                                mention = l_line[2].rstrip()
 
-                    i += 1
+                            # Single-norm cases:
+                            else:
+                                l_cui = [l_line[1].split('|')[0].strip()]
+                                l_label = [l_line[1].split('|')[1].strip()]
+                                mention = l_line[2].rstrip()
+
+                    # Cases where separators '|' are NOT presents:
+                    # (seem to happen just one time in ARTHROTEC.91.ann)
+                    else:
+                        l_cui = [l_line[1].split()[0]]
+                        l_label = [l_line[1].split()[1]]
+                        mention = l_line[2].rstrip()
+
+                ddd_data[foldFileNameWithoutExt][exampleId]["mention"] = mention
+                ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = l_cui
+                ddd_data[foldFileNameWithoutExt][exampleId]["label"] = l_label
+
+                i += 1
 
     return ddd_data
 
 
 
-def loader_snomed_ct_au(filePath):
 
-    # Extract IsA from relationships files.
-    # It seems that 116680003 is the typeId of IsA relation (src: https://confluence.ihtsdotools.org/display/DOCGLOSS/relationship+type)
-    # 280844000	71737002
-
-    dd_sct = dict()
-    if isfile(filePath):
-        with open(filePath, encoding="utf8") as file:
-
-            i=0
-            for line in file:
-                l_line = line.split('\t')
-
-                if i > 0: #Not taking into account the first line of the file
-
-                    cui = l_line[4]
-
-                    if l_line[2] == "1":
-                        if cui not in dd_sct.keys():
-                            dd_sct[cui] = dict()
-                            dd_sct[cui]["label"] = l_line[7]
-                            dd_sct[cui]["tags"] = list()
-
-                        else:
-                            dd_sct[cui]["label"] = l_line[7]
-
-
-                    elif l_line[2] == "0":
-
-                        if cui not in dd_sct.keys():
-                            dd_sct[cui] = dict()
-                            dd_sct[cui]["label"] = None
-                            dd_sct[cui]["tags"] = list()
-                            dd_sct[cui]["tags"].append(l_line[7])
-
-                        else:
-                            dd_sct[cui]["tags"].append(l_line[7])
-
-
-                i+=1
-
-    return dd_sct
-
-
-def loader_amt(filePath):
-    dd_sct = dict()
-    if isfile(filePath):
-        with open(filePath, encoding="utf8") as file:
-            i=0
-            for line in file:
-                l_line = line.split('\t')
-                if i > 0: #Not taking into account the first line of the file
-                    cui = l_line[0]
-                    dd_sct[cui] = dict()
-                    dd_sct[cui]["label"] = l_line[2]
-
-                i+=1
-
-    return dd_sct
 
 
 def get_cui_list(filePath):
@@ -438,436 +471,44 @@ def loader_medic(filePath):
 
 
 ###################################################
-# Intrinsic analysers:
-###################################################
-###
-# WARNING: Add alternative CUIs here too, I think...
-###
-def get_all_used_cui_in_fold(dd_data):
-    s_cui = set()
-    for id in dd_data.keys():
-        for cui in dd_data[id]["cui"]:
-            s_cui.add(cui)
-    return s_cui
-
-def get_all_used_cui(ddd_data):
-    s_cui = set()
-    for fold in ddd_data.keys():
-        dd_fold = ddd_data[fold]
-        s_cui = s_cui.union(get_all_used_cui_in_fold(dd_fold))
-    return s_cui
-
-#########################
-
-def get_freq_examples(dd_data):
-    dd_freq_example = dict()
-
-    for id in dd_data.keys():
-        surfaceForm = dd_data[id]["mention"]
-        dd_freq_example[surfaceForm] = dict()
-
-    for id in dd_data.keys():
-        surfaceForm = dd_data[id]["mention"]
-        l_cuis = dd_data[id]["cui"]
-        for cui in l_cuis:
-            dd_freq_example[surfaceForm][cui] = 0
-
-    for id in dd_data.keys():
-        l_cuis = dd_data[id]["cui"]
-        for cui in l_cuis:
-            dd_freq_example[ dd_data[id]["mention"] ][ cui ] += 1
-
-    return dd_freq_example
-
-def get_freq_examples_in_whole(ddd_data):
-    dd_freq_example = dict()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            dd_freq_example[surfaceForm] = dict()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            cui = ddd_data[foldName][id]["cui"]
-            dd_freq_example[surfaceForm][cui] = 0
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            cui = ddd_data[foldName][id]["cui"]
-            dd_freq_example[surfaceForm][cui] += 1
-
-    return dd_freq_example
-
-
-def get_unique_example(dd_freq_example):
-    nb = 0
-    for surfaceForm in dd_freq_example.keys():
-        for cui in dd_freq_example[surfaceForm].keys():
-            freq = dd_freq_example[surfaceForm][cui]
-            if freq == 1:
-                nb+=1
-    return nb
-
-
-def get_distinct_examples(dd_data):
-    l_distinctExamples = list()
-    dd_freq_example = get_freq_examples(dd_data)
-    for surfaceForm in dd_freq_example.keys():
-        for cui in dd_freq_example[surfaceForm].keys():
-            l_distinctExamples.append([surfaceForm, cui])
-    return l_distinctExamples
-
-def get_distinct_examples_in_whole(ddd_data):
-    l_distinctExamples = list()
-    dd_freq_example = get_freq_examples_in_whole(ddd_data)
-    for surfaceForm in dd_freq_example.keys():
-        for cui in dd_freq_example[surfaceForm].keys():
-            l_distinctExamples.append([surfaceForm, cui])
-    return l_distinctExamples
-
-
-#########################
-
-def get_all_surface_forms_in_fold(dd_data):
-    s_surfaceForms = set()
-    for id in dd_data.keys():
-        s_surfaceForms.add(dd_data[id]["mention"])
-    return s_surfaceForms
-
-def get_all_surface_forms(ddd_data):
-    s_surfaceForms = set()
-
-    for fold in ddd_data.keys():
-        for id in ddd_data[fold].keys():
-            s_surfaceForms.add(ddd_data[fold][id]["mention"])
-
-    return s_surfaceForms
-
-#########################
-
-def get_freq_surface_forms(dd_data):
-    d_freqSurfaceForms = dict()
-    for id in dd_data.keys():
-        surfaceForm = dd_data[id]["mention"]
-        d_freqSurfaceForms[surfaceForm] = 0
-    for id in dd_data.keys():
-        surfaceForm = dd_data[id]["mention"]
-        d_freqSurfaceForms[surfaceForm] += 1
-    return d_freqSurfaceForms
-
-def get_freq_surface_forms_in_whole(ddd_data):
-    d_freqSurfaceForms = dict()
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            d_freqSurfaceForms[surfaceForm] = 0
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            d_freqSurfaceForms[surfaceForm] += 1
-    return d_freqSurfaceForms
-
-def get_unique_surface_forms(d_freqSurfaceForms):
-    l_unique_surface_forms = list()
-    for surfaceForm in d_freqSurfaceForms.keys():
-        if d_freqSurfaceForms[surfaceForm] == 1:
-            l_unique_surface_forms.append(surfaceForm)
-    return l_unique_surface_forms
-
-#########################
-
-def get_average_number_mentions_per_concept(dd_data):
-    nb = 0
-
-    dl_mentionsPerConcept = dict()
-
-    for id in dd_data.keys():
-        l_cuis = dd_data[id]["cui"]
-        for concept in l_cuis:
-            dl_mentionsPerConcept[concept] = list()
-
-    for id in dd_data.keys():
-        mention = dd_data[id]["mention"]
-        l_cuis = dd_data[id]["cui"]
-        for concept in l_cuis:
-            dl_mentionsPerConcept[concept].append(mention)
-
-    for concept in dl_mentionsPerConcept.keys():
-        nb += len(dl_mentionsPerConcept[concept])
-
-    nb = (1.0*nb) / len(dl_mentionsPerConcept.keys())
-
-    return nb
-
-
-def get_average_number_mentions_per_concept_in_whole(ddd_data):
-    nb = 0
-
-    dl_mentionsPerConcept = dict()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            concept = ddd_data[foldName][id]["cui"]
-            dl_mentionsPerConcept[concept] = list()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            mention = ddd_data[foldName][id]["mention"]
-            concept = ddd_data[foldName][id]["cui"]
-            dl_mentionsPerConcept[concept].append(mention)
-
-    for concept in dl_mentionsPerConcept.keys():
-        nb += len(dl_mentionsPerConcept[concept])
-
-    nb = (1.0*nb) / len(dl_mentionsPerConcept.keys())
-
-    return nb
-
-#########################
-
-def get_std_number_mentions_per_concept(dd_data):
-
-    dl_mentionsPerConcept = dict()
-
-    for id in dd_data.keys():
-        l_cuis = dd_data[id]["cui"]
-        for concept in l_cuis:
-            dl_mentionsPerConcept[concept] = list()
-
-    for id in dd_data.keys():
-        mention = dd_data[id]["mention"]
-        l_cuis = dd_data[id]["cui"]
-        for concept in l_cuis:
-            dl_mentionsPerConcept[concept].append(mention)
-
-    l_values = list()
-    for concept in dl_mentionsPerConcept.keys():
-        l_values.append(len(dl_mentionsPerConcept[concept]))
-
-    std_value = std(l_values)
-    median_value = median(l_values)
-
-    return std_value, median_value
-
-
-def get_std_number_mentions_per_concept_in_whole(ddd_data):
-
-    dl_mentionsPerConcept = dict()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            concept = ddd_data[foldName][id]["cui"]
-            dl_mentionsPerConcept[concept] = list()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            mention = ddd_data[foldName][id]["mention"]
-            concept = ddd_data[foldName][id]["cui"]
-            dl_mentionsPerConcept[concept].append(mention)
-
-    l_values = list()
-    for concept in dl_mentionsPerConcept.keys():
-        l_values.append(len(dl_mentionsPerConcept[concept]))
-
-    std_value = std(l_values)
-    median_value = median(l_values)
-
-    return std_value, median_value
-
-#########################
-
-def get_number_of_surface_forms_with_different_labels(dd_data):
-    nbSurfaceForms = 0
-    nbMentions = 0
-
-    ds_surfaceFormsWithLabels = dict()
-    for id in dd_data.keys():
-        surfaceForm = dd_data[id]["mention"]
-        ds_surfaceFormsWithLabels[surfaceForm] = set()
-
-    for id in dd_data.keys():
-        surfaceForm = dd_data[id]["mention"]
-        l_cuis = dd_data[id]["cui"]
-        for cui in l_cuis:
-            ds_surfaceFormsWithLabels[surfaceForm].add(cui)
-
-    for surfaceForm in ds_surfaceFormsWithLabels.keys():
-        if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
-            nbSurfaceForms+=1
-
-    for id in dd_data.keys():
-        surfaceForm = dd_data[id]["mention"]
-        if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
-            nbMentions+=1
-
-
-    return nbSurfaceForms, nbMentions
-
-
-
-def get_number_of_surface_forms_with_different_labels_in_whole(ddd_data):
-    nb=0
-    nbMentions = 0
-
-    ds_surfaceFormsWithLabels = dict()
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            ds_surfaceFormsWithLabels[surfaceForm] = set()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            cui = ddd_data[foldName][id]["cui"]
-            ds_surfaceFormsWithLabels[surfaceForm].add(cui)
-
-    for surfaceForm in ds_surfaceFormsWithLabels.keys():
-        if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
-            nb+=1
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            surfaceForm = ddd_data[foldName][id]["mention"]
-            if len(ds_surfaceFormsWithLabels[surfaceForm]) > 1:
-                nbMentions+=1
-
-    return nb, nbMentions
-
-
-#########################
-
-def get_nb_concepts_with_only_one_mention(dd_data, rate=1):
-    nb=0
-
-    dl_mentionsPerConcept = dict()
-
-    for id in dd_data.keys():
-        l_cuis = dd_data[id]["cui"]
-        for cui in l_cuis:
-            dl_mentionsPerConcept[cui] = list()
-
-    for id in dd_data.keys():
-        mention = dd_data[id]["mention"]
-        l_cuis = dd_data[id]["cui"]
-        for cui in l_cuis:
-            dl_mentionsPerConcept[cui].append(mention)
-
-    for cui in dl_mentionsPerConcept.keys():
-        if len(dl_mentionsPerConcept[cui]) == rate:
-            nb+=1
-
-    return nb
-
-
-def get_nb_concepts_with_only_one_mention_in_whole(ddd_data, rate=1):
-    nb=0
-
-    dl_mentionsPerConcept = dict()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            cui = ddd_data[foldName][id]["cui"]
-            dl_mentionsPerConcept[cui] = list()
-
-    for foldName in ddd_data.keys():
-        for id in ddd_data[foldName].keys():
-            cui = ddd_data[foldName][id]["cui"]
-            mention = ddd_data[foldName][id]["mention"]
-            dl_mentionsPerConcept[cui].append(mention)
-
-
-    for cui in dl_mentionsPerConcept.keys():
-        if len(dl_mentionsPerConcept[cui]) == rate:
-            nb+=1
-
-    return nb
-
-
-#########################
-
-def get_nb_mentions_with_one_concept(dd_data):
-    nb=0
-
-    for id in dd_data.keys():
-        if len(dd_data[id]["cui"]) > 1:
-            nb+=1
-
-    return (len(dd_data.keys()) - nb), nb
-
-###################################################
-# Inter-analysers:
-###################################################
-# List of all id of examples in test which can be seen in train:
-def get_same_examples_from_test_in_train(dd_dataTrain, dd_dataTest):
-    l_sameExamples = list()
-    d_examplesFromTestInTrain = dict()
-
-    for idTest in dd_dataTest.keys():
-        mention = dd_dataTest[idTest]["mention"]
-        cui = dd_dataTest[idTest]["cui"]
-        for idTrain in dd_dataTrain.keys():
-            if dd_dataTrain[idTrain]["mention"] == mention and dd_dataTrain[idTrain]["cui"] == cui:
-                d_examplesFromTestInTrain[idTest] = dict()
-                d_examplesFromTestInTrain[idTest]["mention"] = mention
-                d_examplesFromTestInTrain[idTest]["idExamplesTrain"] = list()
-
-
-    for idTest in dd_dataTest.keys():
-        mention = dd_dataTest[idTest]["mention"]
-        cui = dd_dataTest[idTest]["cui"]
-        for idTrain in dd_dataTrain.keys():
-            if dd_dataTrain[idTrain]["mention"] == mention and dd_dataTrain[idTrain]["cui"] == cui:
-                d_examplesFromTestInTrain[idTest]["mention"] = mention
-                d_examplesFromTestInTrain[idTest]["idExamplesTrain"].append(idTrain)
-
-    return d_examplesFromTestInTrain
-
-
-def get_mentions_from_test_in_train(dd_dataTrain, dd_dataTest):
-    d_mentionsFromTestInTrain = dict()
-
-    for idTest in dd_dataTest.keys():
-        mention = dd_dataTest[idTest]["mention"]
-        for idTrain in dd_dataTrain.keys():
-            if dd_dataTrain[idTrain]["mention"] == mention:
-                d_mentionsFromTestInTrain[idTest] = dict()
-                d_mentionsFromTestInTrain[idTest]["mention"] = mention
-                d_mentionsFromTestInTrain[idTest]["idsTrain"] = list()
-
-    for idTest in d_mentionsFromTestInTrain.keys():
-        for idTrain in dd_dataTrain.keys():
-            if dd_dataTrain[idTrain]["mention"] == d_mentionsFromTestInTrain[idTest]["mention"]:
-                d_mentionsFromTestInTrain[idTest]["idsTrain"].append(idTrain)
-
-    return d_mentionsFromTestInTrain
-
-
-
-def get_surface_forms_from_test_in_train(dd_dataTrain, dd_dataTest):
-    d_surfaceFormsFromTestInTrain = dict()
-
-    for idTest in dd_dataTest.keys():
-        mention = dd_dataTest[idTest]["mention"]
-        for idTrain in dd_dataTrain.keys():
-            if dd_dataTrain[idTrain]["mention"] == mention:
-                d_surfaceFormsFromTestInTrain[mention] = dict()
-                d_surfaceFormsFromTestInTrain[mention]["idTest"] = idTest
-                d_surfaceFormsFromTestInTrain[mention]["idsTrain"] = list()
-
-    for surfaceForm in d_surfaceFormsFromTestInTrain.keys():
-        for idTrain in dd_dataTrain.keys():
-            if dd_dataTrain[idTrain]["mention"] == surfaceForm:
-                d_surfaceFormsFromTestInTrain[surfaceForm]["idsTrain"].append(idTrain)
-
-    return d_surfaceFormsFromTestInTrain
-
-
-###################################################
 # Tools:
 ###################################################
+
+def fusion_ref(dd_ref1, dd_ref2):
+    dd_fullRef = dict()
+    for cui in dd_ref1.keys():
+        dd_fullRef[cui] = dd_ref1[cui]
+    for cui in dd_ref2.keys():
+        if cui in dd_ref1.keys():
+            print("WARNING: same CUIs in both reference! ["+cui+" - "+dd_ref1[cui]["label"]+" / "+dd_ref2[cui]["label"]+")")
+        dd_fullRef[cui] = dd_ref2[cui]
+    return dd_fullRef
+
+
+def get_tags_in_ref(dd_ref):
+    s_tags = set()
+    for cui in dd_ref.keys():
+        s_tags.add(dd_ref[cui]["label"])
+        if "tags" in dd_ref[cui].keys():
+            for tag in dd_ref[cui]["tags"]:
+                s_tags.add(tag)
+    return s_tags
+
+
+def get_cuis_set_from_corpus(dd_corpus):
+    s_cuis = set()
+    for id in dd_corpus.keys():
+        for cui in dd_corpus[id]["cui"]:
+            s_cuis.add(cui)
+    return s_cuis
+
+
+
+
+
+
+
+
 
 def fusion_folds(l_dd_folds):
     dd_data = dict()
@@ -906,114 +547,25 @@ def extract_data_without_file(ddd_data):
 
 
 
+
+
+
+
+###################################################
+# Checking:
+###################################################
+def check_if_cuis_arent_in_ref(s_cuis, dd_ref):
+    s_unknowCuis = set()
+    for cui in s_cuis:
+        if cui not in dd_ref.keys():
+            s_unknowCuis.add(cui)
+    return s_unknowCuis
+
+
+
 ###################################################
 # Printers:
 ###################################################
-def get_log(dd_train, dd_test, tag1="train", tag2="test"):
-
-    print("\nBeginning of analyis...")
-    print("\nIntra-analysis...")
-
-    # Concepts used
-    s_cui_train = get_all_used_cui_in_fold(dd_train)
-    print("\nAll CUIs used in the "+tag1+" dataset: ", len(s_cui_train))
-    try:
-        s_cui_test = get_all_used_cui_in_fold(dd_test)
-        print("All CUIs used in the "+tag2+" dataset: ", len(s_cui_test))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-    # Number of examples: (WARNING: different from all the examples in the original corpus (because overlapping between folds)
-    print("\nNumber of examples in "+tag1+":", len(dd_train))
-    print("Number of examples in "+tag2+":", len(dd_test))
-
-    print("\nUnique examples:")
-    print("Number of unique examples in "+tag1+":", get_unique_example(get_freq_examples(dd_train)))
-    try:
-        print("Number of unique examples in "+tag2+":", get_unique_example(get_freq_examples(dd_test)))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-    print("\nDistinct examples:")
-    print("Number of distinct examples in "+tag1+":", len(get_distinct_examples(dd_train)))
-    try:
-        print("Number of distinct examples in "+tag2+":", len(get_distinct_examples(dd_test)))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-    print("\nDistinct surface forms:")
-    s_surfaceFormsTrain = get_all_surface_forms_in_fold(dd_train)
-    print("All surface forms in the "+tag1+": ", len(s_surfaceFormsTrain))
-    s_surfaceFormsTest = get_all_surface_forms_in_fold(dd_test)
-    print("All surface forms in the "+tag2+": ", len(s_surfaceFormsTest))
-
-    print("\nUnique surface forms:")
-    print("Nb of unique surface forms in the "+tag1+": ", len(get_unique_surface_forms(get_freq_surface_forms(dd_train))))
-    print("Nb of unique surface forms in the "+tag2+": ", len(get_unique_surface_forms(get_freq_surface_forms(dd_test))))
-
-    print("\nAverage number of mentions per concepts:")
-    print("Average number of mentions per concepts in the "+tag1+": ", get_average_number_mentions_per_concept(dd_train))
-    try:
-        print("Average number of mentions per concepts in the "+tag2+": ", get_average_number_mentions_per_concept(dd_test))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-    print("\nStandard deviation and median of mentions per concepts:")
-    print("Standard deviation and median of mentions per concepts in the "+tag1+": ", get_std_number_mentions_per_concept(dd_train))
-    try:
-        print("Standard deviation and median of mentions per concepts in the "+tag2+": ", get_std_number_mentions_per_concept(dd_test))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-    print("\nSingle shot situation?")
-    print("Number concepts with only one mention in the "+tag1+": ", get_nb_concepts_with_only_one_mention(dd_train))
-    try:
-        print("Number concepts with only one mention in the "+tag2+": ", get_nb_concepts_with_only_one_mention(dd_test))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-    #################
-    print("\nNumber of mentions normalized by a unique concept (no multi-norm):")
-    print("Number of mentions normalized by a unique concept in the "+tag1+": ", get_nb_mentions_with_one_concept(dd_train))
-    try:
-        print("Number of mentions normalized by a unique concept in the "+tag2+": ", get_nb_mentions_with_one_concept(dd_test))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-    print("\nHow many surface forms have more than one annotating concept (=ambiguity mention) ?")
-    print("Number of surface forms with different possible labels in the "+tag1+": ", get_number_of_surface_forms_with_different_labels(dd_train))
-    try:
-        print("Number of surface forms with different possible labels in the "+tag2+": ", get_number_of_surface_forms_with_different_labels(dd_test))
-    except:
-        print("Non Available data for "+tag2+" dataset.")
-
-
-    print("\nInter-analysis...")
-
-    print("\nIntersection "+tag1+"/"+tag2+":")
-    try:
-        print(len(get_same_examples_from_test_in_train(dd_train, dd_test).keys()))
-    except:
-        print("Non Available because non-available data for "+tag2+" dataset.")
-
-    print("\nNb mentions in "+tag2+" also seen in "+tag1+":", len(get_mentions_from_test_in_train(dd_train, dd_test).keys()))
-
-    print("\nNumber of surface forms from "+tag2+" also present in "+tag1+":", len(get_surface_forms_from_test_in_train(dd_train, dd_test).keys()))
-
-    print("\nNumber of concepts mentioned in "+tag2+" which are mentioned in "+tag1+":")
-    try:
-        nb=0
-        for cui in s_cui_test:
-            if cui in s_cui_train:
-                nb+=1
-        print(nb)
-    except:
-        print("Non Available because non-available data for "+tag2+" dataset.")
-
-    print("\nEnd of analysis.")
-
-
-
 
 
 #######################################################################################################
@@ -1023,11 +575,90 @@ if __name__ == '__main__':
 
 
     ################################################
-    print("\n\n\n\nCustom CADEC\n")
+    print("\n\n\n\nCADEC (3 datasets):\n")
     ################################################
 
-    dd_sct = loader_snomed_ct_au("../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release\Snapshot/Terminology/sct2_Description_Snapshot-en-AU_AU1000036_20140531.txt")
+    print("loading SCT-AUv20140531...")
+    dd_sct = loader_snomed_ct_au("../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release/Snapshot/Terminology/sct2_Description_Snapshot-en-AU_AU1000036_20140531.txt",
+                                 "../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release/Snapshot/Refset/Language/der2_cRefset_LanguageSnapshot-en-AU_AU1000036_20140531.txt",
+                                 l_keptActivity=["1"])#
+    print("loaded. (Nb of concepts in SCT =", len(dd_sct.keys()),", Nb of tags =", len(get_tags_in_ref(dd_sct)), ")")
+
+    print("loading AMTv2.56...")
+    dd_amt = loader_amt("../CADEC/AMT_v2.56/Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt")
+    print("loaded. (Nb of concepts in AMT =", len(dd_amt.keys()),", Nb of tags =", len(get_tags_in_ref(dd_amt)), ")")
+
+    print("\nFusion SCT & AMT in one reference...")
+    dd_ref = fusion_ref(dd_sct, dd_amt)
+    print("done. (Nb of concepts in SCT+AMT =", len(dd_ref.keys()),", Nb of tags =", len(get_tags_in_ref(dd_ref)), ")")
+
+    print("\nLoading CUIs list used by [Miftahutdinov et al. 2019]...")
     l_sctFromCadec = get_cui_list("../CADEC/custom_CUI_list.txt")
+    print("loaded.(Nb of concepts in the list (with CONCEPT_LESS =", len(l_sctFromCadec),")")
+
+
+    print("\n\nLoading initial CADEC corpus...")
+    ddd_data = loader_all_initial_cadec_folds("../CADEC/0_Original_CADEC/AMT-SCT/")
+    dd_initCadec = extract_data_without_file(ddd_data)
+    print("loaded.(Nb of mentions in initial CADEC =", len(dd_initCadec.keys()),")")
+
+    print("\nLoading random CADEC corpus...")
+    ddd_randData = loader_all_random_cadec_folds("../CADEC/1_Random_folds_AskAPatient/")
+    dd_randCadec = extract_data_without_file(ddd_randData)
+    print("loaded.(Nb of mentions in ALL folds for random CADEC =", len(dd_randCadec.keys()),")")
+
+    print("\nLoading custom CADEC corpus...")
+    ddd_data = loader_all_custom_cadec_folds("../CADEC/2_Custom_folds/")
+    dd_customCadec = extract_data_without_file(ddd_data)
+    print("loaded.(Nb of mentions in ALL folds for custom CADEC =", len(dd_customCadec.keys()),")")
+
+
+    print("\n\nLoading cuis set in corpus...")
+    s_cuisInInitCadec = get_cuis_set_from_corpus(dd_initCadec)
+    s_cuisInRandCadec = get_cuis_set_from_corpus(dd_randCadec)
+    s_cuisInCustomCadec = get_cuis_set_from_corpus(dd_customCadec)
+    print("Loaded.(Nb of distinct used concepts in init/rand/custom =", len(s_cuisInInitCadec), len(s_cuisInRandCadec), len(s_cuisInCustomCadec),")")
+
+
+    print("\n\nChecking:")
+
+    s_unknownCuisFromInit = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_ref)
+    print("\nUnknown concepts in initial CADEC:", len(s_unknownCuisFromInit))
+    s_unknownCuisFromRand = check_if_cuis_arent_in_ref(s_cuisInRandCadec, dd_ref)
+    print("Unknown concepts in random CADEC:", len(s_unknownCuisFromRand))
+    s_unknownCuisFromCustom = check_if_cuis_arent_in_ref(s_cuisInCustomCadec, dd_ref)
+    print("Unknown concepts in custom CADEC:", len(s_unknownCuisFromCustom))
+    s_unknownCuisFromList = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_ref)
+    print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromList))
+
+
+
+    print(s_unknownCuisFromInit)
+    print(s_unknownCuisFromRand)
+    print("---------------------")
+    for cui in s_unknownCuisFromRand:
+        if cui not in s_unknownCuisFromInit:
+            print(cui)
+
+    for file in ddd_randData.keys():
+        for id in ddd_randData[file].keys():
+            for cui in ddd_randData[file][id]["cui"]:
+                if cui == "21499005" or cui == "81680008":
+                    print(file, id, dd_randCadec[id])
+
+
+
+
+
+
+
+
+
+
+
+
+    sys.exit(0)
+
 
     print("len(dd_sct):", len(dd_sct), "\nlen(l_sctFromCadec):", len(l_sctFromCadec))
 
