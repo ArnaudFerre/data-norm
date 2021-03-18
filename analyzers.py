@@ -630,6 +630,52 @@ if __name__ == '__main__':
 
     print(len(s_nil), s_nil)
 
+    ddd_data = loader_all_cadec_folds("../CADEC/2_Custom_folds/")
+    print("\nddd_data built.")
+
+    dd_train0 = extract_one_cadec_fold(ddd_data, "train_0")
+    dd_train1 = extract_one_cadec_fold(ddd_data, "train_1")
+    dd_train2 = extract_one_cadec_fold(ddd_data, "train_2")
+    dd_train3 = extract_one_cadec_fold(ddd_data, "train_3")
+    dd_train4 = extract_one_cadec_fold(ddd_data, "train_4")
+
+    dd_test0 = extract_one_cadec_fold(ddd_data, "test_0")
+    dd_test1 = extract_one_cadec_fold(ddd_data, "test_1")
+    dd_test2 = extract_one_cadec_fold(ddd_data, "test_2")
+    dd_test3 = extract_one_cadec_fold(ddd_data, "test_3")
+    dd_test4 = extract_one_cadec_fold(ddd_data, "test_4")
+
+    print("Unitary folds built, ex: dd_test0:", dd_test0)
+
+    dd_train_data = fusion_folds([dd_train0, dd_train1, dd_train2, dd_train3, dd_train4])
+    dd_test_data = fusion_folds([dd_test0, dd_test1, dd_test2, dd_test3, dd_test4])
+
+    print("Full train fold, and full test fold, built.")
+
+    dd_train_test_0 = fusion_folds([dd_train0, dd_test0])
+    dd_train_test_1 = fusion_folds([dd_train1, dd_test1])
+    dd_train_test_2 = fusion_folds([dd_train2, dd_test2])
+    dd_train_test_3 = fusion_folds([dd_train3, dd_test3])
+    dd_train_test_4 = fusion_folds([dd_train4, dd_test4])
+
+    print("Train/test folds built, ex: dd_train_test_0:", dd_train_test_0)
+
+    dd_full = fusion_folds([dd_train_test_0, dd_train_test_1, dd_train_test_2, dd_train_test_3, dd_train_test_4])
+
+    get_log(dd_full, dd_test_data, tag1="Full", tag2="all_test")
+    print("\n\n")
+    get_log(dd_train_data, dd_test_data, tag1="all_train", tag2="all_test")
+    print("\n\n")
+    get_log(dd_train0, dd_test0, tag1="train0", tag2="test0")
+    print("\n\n")
+    get_log(dd_train1, dd_test1, tag1="train1", tag2="test1")
+    print("\n\n")
+    get_log(dd_train2, dd_test2, tag1="train2", tag2="test2")
+    print("\n\n")
+    get_log(dd_train3, dd_test3, tag1="train3", tag2="test3")
+    print("\n\n")
+    get_log(dd_train4, dd_test4, tag1="train4", tag2="test4")
+
     ################################################
     print("\n\n\n\nRandom CADEC\n")
     ################################################
@@ -754,6 +800,100 @@ if __name__ == '__main__':
     print(len(s1), len(s2), len(s3))
 
     get_log(dd_cadec, dd_cadec, tag1="Full", tag2="Full")
+
+    ################################################
+    print("\n\n\n\nBB4")
+    ################################################
+
+    from pronto import Ontology
+
+    onto = Ontology("../BB4/OntoBiotope_BioNLP-OST-2019.obo")
+
+    ddd_dataTrain = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train"])
+    ddd_dataDev = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_dev"])
+    ddd_dataTrainDev = loader_one_bb4_fold(
+        ["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev"])
+    ddd_dataTest = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_test"])
+    ddd_dataAll = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev",
+                                       "../BB4/BioNLP-OST-2019_BB-norm_test"])
+
+    dd_habTrain = extract_data(ddd_dataTrain, l_type=["Habitat"])
+    dd_habDev = extract_data(ddd_dataDev, l_type=["Habitat"])
+    dd_habTrainDev = extract_data(ddd_dataTrainDev, l_type=["Habitat"])
+    dd_habTest = extract_data(ddd_dataTest, l_type=["Habitat"])
+    dd_habAll = extract_data(ddd_dataAll, l_type=["Habitat"])
+    print(dd_habTrain)
+    print(dd_habTest)
+
+    get_log(dd_habTrain, dd_habTest, tag1="train_hab", tag2="test_hab")
+    print("\n\n")
+    get_log(dd_habTrain, dd_habDev, tag1="train_hab", tag2="dev_hab")
+    print("\n\n")
+    get_log(dd_habTrainDev, dd_habTest, tag1="train+dev_hab", tag2="test_hab")
+
+    ################################################
+    print("\n\n\n\nNCBI")
+    ################################################
+
+    dd_medic = loader_medic("../NCBI/FixedVersion/CTD_diseases_DNorm_v2012_07_6_fixed.tsv")
+    nbConcepts = len(dd_medic.keys())
+    print("\nNumber of concepts in MEDIC:", nbConcepts)
+
+    # Fields in MEDIC file:
+    # DiseaseName	DiseaseID	AltDiseaseIDs	Definition	ParentIDs	TreeNumbers	ParentTreeNumbers	Synonyms
+    # In trainset: 2792129	158	178	recurrent meningitis	SpecificDisease	D008581+D012008
+
+    # For initial MEDIC/datasets, some alternative CUIs are used in the corpus...
+    s_medic = set(dd_medic.keys())
+    s_alt = set()
+    s_inter = set()
+    s_both = set(dd_medic.keys())
+    for cui in dd_medic.keys():
+        if "alt_cui" in dd_medic[cui].keys():
+            for altCui in dd_medic[cui]["alt_cui"]:
+                s_both.add(altCui)
+                if altCui not in s_medic:
+                    s_alt.add(altCui)
+                else:
+                    s_inter.add(cui + "/" + altCui)
+
+    print("Number of alternative CUIs in MEDIC:", len(s_alt))
+    print("Number of CUIs in MEDIC (main+alternative)", len(s_both))
+    print("Sibling concepts in MEDIC used in the NCBI dataset:", s_inter)
+
+    print("\n\n")
+
+    ddd_dataFull = loader_one_ncbi_fold(
+        ["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt",
+         "../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
+    dd_Full = extract_data(ddd_dataFull, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("Number of examples/mentions in Full dataset: ", len(dd_Full.keys()))
+
+    ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt"])
+    dd_Train = extract_data(ddd_dataTrain, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print(id, len(dd_Train.keys()))
+
+    ddd_dataDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
+    dd_Dev = extract_data(ddd_dataDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print(len(dd_Dev.keys()))
+
+    ddd_dataTrainDev = loader_one_ncbi_fold(
+        ["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
+    dd_TrainDev = extract_data(ddd_dataTrainDev,
+                               l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print(len(dd_TrainDev.keys()))
+
+    ddd_dataTest = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
+    dd_Test = extract_data(ddd_dataTest, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print(len(dd_Test.keys()))
+
+    get_log(dd_Train, dd_Dev, tag1="train", tag2="dev")
+    print("\n\n")
+    get_log(dd_TrainDev, dd_Test, tag1="train+dev", tag2="test")
+    print("\n\n")
+    get_log(dd_Train, dd_Test, tag1="train", tag2="test")
+    print("\n\n")
+    get_log(dd_Full, dd_Test, tag1="Full", tag2="test")
 
 
 

@@ -2,6 +2,10 @@
 # RALI, Montreal University
 #
 # Description :
+# Reference = dict() -> {CUI_1: {"label": X1}, {"tags": [Y11, Y12, ..., Y1N]}, {"parents": [CUI_11, ..., CUI_1M]}, {"alt_cui": [alt_CUI_11, ..., alt_CUI_1P]}}
+# Minimal attribute: label
+# corpus = dict() -> (mentionId_1: {"mention": Z1}, {"cui": [C11, ..., C1Q]}, {"T": "T*"}, {"type": "****"}}
+# Minimal attributes: mention and cui
 
 
 
@@ -14,7 +18,11 @@ from os import listdir
 from os.path import isfile, join, splitext, basename
 import re
 import sys
+import copy
+
 from numpy import std, median
+from pronto import Ontology
+
 
 
 
@@ -26,7 +34,7 @@ from numpy import std, median
 # Reference loaders:
 ###################################################
 
-def loader_snomed_ct_au(descriptionFilePath, languageFilePath, l_select=['900000000000207008', '900000000000012004', '32506021000036107', '32570491000036106', '161771000036108'], l_keptActivity=["0","1"]):
+def loader_snomed_ct_au(descriptionFilePath, languageFilePath, relationFilePath, l_select=['900000000000207008', '900000000000012004', '32506021000036107', '32570491000036106', '161771000036108']):
 
     # Extract IsA from relationships files.
     # It seems that 116680003 is the typeId of IsA relation (src: https://confluence.ihtsdotools.org/display/DOCGLOSS/relationship+type)
@@ -44,7 +52,7 @@ def loader_snomed_ct_au(descriptionFilePath, languageFilePath, l_select=['900000
                 l_line = line.split('\t')
 
                 if l_line[3] in l_select:
-                    if l_line[2] in l_keptActivity:
+                    if l_line[2] == '1':
 
                         id = l_line[0]
                         dd_description[id] = dict()
@@ -54,6 +62,8 @@ def loader_snomed_ct_au(descriptionFilePath, languageFilePath, l_select=['900000
 
                         dd_sct[cui] = dict()
                         dd_sct[cui]["tags"] = list()
+                        dd_sct[cui]["parents"] = list()
+
 
             i+=1
 
@@ -65,13 +75,14 @@ def loader_snomed_ct_au(descriptionFilePath, languageFilePath, l_select=['900000
             if i > 0:  # Not taking into account the first line of the file
                 l_line = line.split('\t')
 
-                if l_line[2] in l_keptActivity:
+                if l_line[2] == "1":
 
                     referencedComponentId = l_line[5]
                     acceptabilityId = l_line[6].rstrip()
                     cui = dd_description[referencedComponentId]["cui"]
 
                     if acceptabilityId == "900000000000548007": #preferred term/label id
+
                         dd_sct[cui]["label"] = dd_description[referencedComponentId]["term"]
 
                     elif acceptabilityId == "900000000000549004": #Acceptable term (i.e. tags/synonyms)
@@ -79,15 +90,44 @@ def loader_snomed_ct_au(descriptionFilePath, languageFilePath, l_select=['900000
 
             i += 1
 
-    # It seems that there are 6 concepts without preferred term/label in this SCT-AU version.
-    # All these 6 have only one tag, so we just swap the label and the tag.
+
+    # Some modifications to extract correct data from the SCT-AU v20140531 files:
+
+    # There is also no label for the concept 401103008, and no tags in the language file.
+    # But this concept is not in the "Clinical finding" hierarchy, thus, it is just erased:
+    del dd_sct['401103008']
+
+    # It seems that there are 62 concepts without preferred term/label in this SCT-AU version (with only active value).
+    # Here, a tag is just taken to be the label, but in pratice, no one of these 62 concepts are conserved in the "Clinical finding" hierarchy.
+    """
+    l_conceptsWithoutLabel=["141461000119106", "141471000119100", "284831000119107", "285801000119101", "288451000119108", "33771000119101", "115176002", "206030004", "268808004", "206064000", "18001006", "52055002", "68983007", "60949004", "53035006", "66215008", "88990005", "42226006", "75291008", "82372009", "73890002", "111463007", "38405004", "65522009", "82587000", "83818003", "67743008", "25932007", "63254003", "20962004", "68122004", "17317007", "69366004", "50968003", "31902002", "80951007", "70165003", "55730009", "22747004", "19691005", "65599008", "28627008", "61362004", "76984009", "81804001", "38425000", "69693005", "63434001", "68213008", "16505001", "30409006", "56192002", "36336001", "111462002", "39918005", "27979008", "79187002", "53516004", "63654005", "62048002", "38942004", "53634006"]
+    """
+    i = 0
     for cui in dd_sct.keys():
         if "label" not in dd_sct[cui].keys():
-            try:
-                dd_sct[cui]["label"] = dd_sct[cui]["tags"][0]
-                dd_sct[cui]["tags"] = []
-            except:
-                print(cui, dd_sct[cui])
+            l_tags = dd_sct[cui]["tags"]
+            dd_sct[cui]["label"] = l_tags[0]
+            dd_sct[cui]["tags"] = l_tags[1:]
+
+
+    with open(relationFilePath, encoding="utf8") as file:
+        i = 0
+        for line in file:
+
+            if i > 0:  # Not taking into account the first line of the file
+                l_line = line.split('\t')
+
+                if l_line[2] == "1":
+
+                    relationshipGroup = l_line[7]
+                    if relationshipGroup == "116680003": # is_a relationship id
+
+                        sourceId = l_line[4]
+                        parentId = l_line[5]
+                        dd_sct[sourceId]["parents"].append(parentId)
+
+            i += 1
+
 
     return dd_sct
 
@@ -96,9 +136,7 @@ def loader_snomed_ct_au(descriptionFilePath, languageFilePath, l_select=['900000
 
 def loader_amt(filePath):
 
-    s_set = set()
-
-    dd_sct = dict()
+    dd_amt = dict()
     if isfile(filePath):
         with open(filePath, encoding="utf8") as file:
             i=0
@@ -113,12 +151,68 @@ def loader_amt(filePath):
                             pass
                         else:
                             cui = l_line[0]
-                            dd_sct[cui] = dict()
-                            dd_sct[cui]["label"] = l_line[2]
+                            dd_amt[cui] = dict()
+                            dd_amt[cui]["label"] = l_line[2]
 
                 i+=1
 
-    return dd_sct
+    return dd_amt
+
+
+#########################
+
+def loader_ontobiotope(filePath):
+    dd_obt = dict()
+    onto = Ontology(filePath)
+    for o_concept in onto:
+        dd_obt[o_concept.id]=dict()
+
+        dd_obt[o_concept.id]["label"]= o_concept.name
+
+        dd_obt[o_concept.id]["tags"] = list()
+        for o_tag in o_concept.synonyms:
+            dd_obt[o_concept.id]["tags"].append(o_tag.desc)
+
+        dd_obt[o_concept.id]["parents"] = list()
+        for o_parent in o_concept.parents:
+            dd_obt[o_concept.id]["parents"].append(o_parent.id)
+
+    return dd_obt
+
+
+#########################
+
+
+def loader_medic(filePath):
+
+    dd_medic = dict()
+
+    if isfile(filePath):
+        with open(filePath, encoding="utf8") as file:
+
+            for line in file:
+
+                l_line = line.split('\t')
+
+                try:
+                    cui = l_line[1]
+                    if cui == "DiseaseID":
+                        pass
+                    else:
+                        dd_medic[cui]=dict()
+
+                        dd_medic[cui]["label"] = l_line[0]
+                        if len(l_line[2]) > 0:
+                            dd_medic[cui]["alt_cui"] = l_line[2].split('|')
+
+                        dd_medic[cui]["tags"] = l_line[7].rstrip().split('|')
+                        dd_medic[cui]["parents"] = l_line[4].split('|')
+
+                except:
+                    pass
+
+
+    return dd_medic
 
 
 
@@ -215,6 +309,7 @@ def loader_all_initial_cadec_folds(repPath):
             ddd_data[foldFileNameWithoutExt] = dict()
 
             for line in foldFile:
+
                 exampleId = "initial_cadec_" + "{number:06}".format(number=i)
                 ddd_data[foldFileNameWithoutExt][exampleId] = dict()
 
@@ -274,13 +369,14 @@ def loader_all_initial_cadec_folds(repPath):
 
                 i += 1
 
+
     return ddd_data
 
 
 
 
 
-
+# From the list gave by :
 def get_cui_list(filePath):
     l_cuis = list()
 
@@ -359,7 +455,7 @@ def loader_one_bb4_fold(l_repPath):
                                 for id in ddd_data[fileNameWithoutExt].keys():
                                     if ddd_data[fileNameWithoutExt][id]["T"] == Tvalue :
                                         if ddd_data[fileNameWithoutExt][id]["type"] == "Habitat" or ddd_data[fileNameWithoutExt][id]["type"] == "Phenotype":
-                                            cui = l_info[2].split(':')[2].rstrip()
+                                            cui = "OBT:"+l_info[2].split(':')[2].rstrip()
                                             ddd_data[fileNameWithoutExt][id]["cui"].append(cui)
                                         elif ddd_data[fileNameWithoutExt][id]["type"] == "Microorganism":
                                             cui = l_info[2].split(':')[1].rstrip()
@@ -437,39 +533,6 @@ def loader_one_ncbi_fold(l_foldPath):
     return ddd_data
 
 
-
-def loader_medic(filePath):
-
-    dd_medic = dict()
-
-    if isfile(filePath):
-        with open(filePath, encoding="utf8") as file:
-
-            for line in file:
-
-                l_line = line.split('\t')
-
-                try:
-                    cui = l_line[1]
-                    if cui == "DiseaseID":
-                        pass
-                    else:
-                        dd_medic[cui]=dict()
-
-                        dd_medic[cui]["label"] = l_line[0]
-                        if len(l_line[2]) > 0:
-                            dd_medic[cui]["alt_cui"] = l_line[2].split('|')
-
-                        dd_medic[cui]["tags"] = l_line[7].rstrip().split('|')
-                        dd_medic[cui]["parents"] = l_line[4].split('|')
-
-                except:
-                    pass
-
-
-    return dd_medic
-
-
 ###################################################
 # Tools:
 ###################################################
@@ -502,6 +565,80 @@ def get_cuis_set_from_corpus(dd_corpus):
             s_cuis.add(cui)
     return s_cuis
 
+##########################
+
+"""
+dd_ref = {'A': {"parents": ['X']}, 'B': {"parents": ['A']}, 'C': {"parents": ['A']}, 'D': {"parents": ['B']},
+          'E': {"parents": ['B', 'F']}, 'F': {"parents": ['C']}, 'G': {"parents": ['E'], "label": "G", "tags": ["g", "jay"]}, 'H': {"parents": ['G']},
+          'X': {"parents": []}}
+"""
+def is_desc(dd_ref, cui, cuiParent):
+    result = False
+
+    if "parents" in dd_ref[cui].keys():
+        if len(dd_ref[cui]["parents"]) > 0:
+
+            # Normal case if no infinite is_a loop:
+            if cuiParent in dd_ref[cui]["parents"]:
+                result = True
+            else:
+                for parentCui in dd_ref[cui]["parents"]:
+                    result = is_desc(dd_ref, parentCui, cuiParent)
+                    if result == True:
+                        break
+
+    return result
+
+
+# 99814 concepts in Clinical Findings hierarchy?
+def select_subpart_hierarchy(dd_ref, newRootCui):
+    dd_subpart = dict()
+
+    dd_subpart[newRootCui] = dd_ref[newRootCui]
+    dd_subpart[newRootCui]["parents"] = []
+
+    for cui in dd_ref.keys():
+        if is_desc(dd_ref, cui, newRootCui)== True:
+
+            dd_subpart[cui] = copy.deepcopy(dd_ref[cui])
+
+
+    # Clear parents which are not in the descendants of the new root:
+    for cui in dd_subpart.keys():
+        dd_subpart[cui]["parents"] = list()
+        for parentCui in dd_ref[cui]["parents"]:
+            if is_desc(dd_ref, parentCui, newRootCui) or parentCui==newRootCui:
+                dd_subpart[cui]["parents"].append(parentCui)
+
+
+    return dd_subpart
+
+
+
+def select_subpart_with_patterns_in_label(dd_ref, l_patterns=["(trade product)", "(medicinal product)"]):
+    dd_subpart = dict()
+
+    """
+    l_metacarac = ['.', '^', '$', '*', '+', '?', '{', '}', '[', ']', '\\', '|', '(', ')']
+    print(l_metacarac)
+    request = re.compile('')
+    """
+
+    # 100%: “(medicinal product)”, “(AU substance)”, “(trade product unit of use)” or “(medicinal product unit of use)”.
+    request1 = re.compile('.*\(trade product\).*')
+    request2 = re.compile('.*\(medicinal product\).*')
+    request3 = re.compile('.*\(AU substance\).*')
+    request4 = re.compile('.*\(trade product unit of use\).*')
+    request5 = re.compile('.*\(medicinal product unit of use\).*')
+    for cui in dd_ref.keys():
+        if request1.match(dd_ref[cui]["label"]) or request2.match(dd_ref[cui]["label"]) or request3.match(dd_ref[cui]["label"]) or request4.match(dd_ref[cui]["label"]) or request5.match(dd_ref[cui]["label"]):
+            dd_subpart[cui] = copy.deepcopy(dd_ref[cui])
+
+    # Clear the labels from its pattern:
+
+
+
+    return dd_subpart
 
 
 
@@ -509,6 +646,47 @@ def get_cuis_set_from_corpus(dd_corpus):
 
 
 
+
+def write_ref(dd_ref, filePath):
+
+    with open(filePath, 'w', encoding="utf8") as file:
+
+        line = "CUI" + "\t" + "label" + "\t" + "ParentsCUIs" + "\t" + "tags"  + "\n"
+        file.write(line)
+
+        for cui in dd_ref.keys():
+
+            lineLabel = ""
+            lineParents = ""
+            lineTags = ""
+
+            if "label" in dd_ref[cui].keys():
+                lineLabel = dd_ref[cui]["label"]
+
+            if "parents" in dd_ref[cui].keys():
+                for i, parentCui in enumerate(dd_ref[cui]["parents"]):
+                    if i == len(dd_ref[cui]["parents"])-1 :
+                        lineParents += parentCui
+                    else:
+                        lineParents += parentCui + " | "
+
+            if "tags" in dd_ref[cui].keys():
+                for i, tag in enumerate(dd_ref[cui]["tags"]):
+                    if i == len(dd_ref[cui]["tags"]) - 1:
+                        lineTags += tag
+                    else:
+                        lineTags += tag + " | "
+
+            line = cui + "\t" + lineLabel + "\t" + lineParents + "\t" + lineTags + "\n"
+
+            file.write(line)
+
+    print("Reference saved in", filePath)
+
+
+
+
+##########################
 
 def fusion_folds(l_dd_folds):
     dd_data = dict()
@@ -575,22 +753,67 @@ if __name__ == '__main__':
 
 
     ################################################
-    print("\n\n\n\nCADEC (3 datasets):\n")
+    print("\n\n\nCADEC (3 datasets):\n")
     ################################################
 
     print("loading SCT-AUv20140531...")
     dd_sct = loader_snomed_ct_au("../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release/Snapshot/Terminology/sct2_Description_Snapshot-en-AU_AU1000036_20140531.txt",
                                  "../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release/Snapshot/Refset/Language/der2_cRefset_LanguageSnapshot-en-AU_AU1000036_20140531.txt",
-                                 l_keptActivity=["1"])#
+                                 "../CADEC/SNOMED_CT_AU_20140531/SnomedCT_Release_AU1000036_20140531/RF2 Release/Snapshot/Terminology/sct2_Relationship_Snapshot_AU1000036_20140531.txt")
     print("loaded. (Nb of concepts in SCT =", len(dd_sct.keys()),", Nb of tags =", len(get_tags_in_ref(dd_sct)), ")")
+
+    print("\nExtracting subpart Clinical Finding hierarchy:")
+    dd_subSct = select_subpart_hierarchy(dd_sct, '404684003')
+    print("Done. (Nb of concepts in this subpart of SCT =", len(dd_subSct.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_subSct)), ")")
+
+    write_ref(dd_subSct, "../CADEC/clinicalFindingSubPart.csv")
+
+    sys.exit(0)
+
+
 
     print("loading AMTv2.56...")
     dd_amt = loader_amt("../CADEC/AMT_v2.56/Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt")
     print("loaded. (Nb of concepts in AMT =", len(dd_amt.keys()),", Nb of tags =", len(get_tags_in_ref(dd_amt)), ")")
 
+    print("\nExtracting all Trade Product from AMT:")
+    l_pat = ["(trade product)"] #["(trade product)", "(medicinal product)"]
+    dd_subAmt = select_subpart_with_patterns_in_label(dd_amt, l_patterns=l_pat)
+    print("Done. (Nb of concepts in this subpart AMT (", l_pat, ") =", len(dd_subAmt.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_subAmt)), ")")
+
+
+    request1 = re.compile('.+(\(.+\))$')
+    s_types = set()
+    for i, cui in enumerate(dd_amt.keys()):
+        m = request1.match(dd_amt[cui]["label"])
+        if m:
+            s_types.add(m.group(1))
+
+    print(len(s_types), s_types)
+
+
+
+
+
+
+
+
+
+    sys.exit(0)
+
+
+
     print("\nFusion SCT & AMT in one reference...")
     dd_ref = fusion_ref(dd_sct, dd_amt)
     print("done. (Nb of concepts in SCT+AMT =", len(dd_ref.keys()),", Nb of tags =", len(get_tags_in_ref(dd_ref)), ")")
+
+    print("\nFusion subSCT & AMT in one reference...")
+    dd_subRef = fusion_ref(dd_subSct, dd_amt)
+    print("done. (Nb of concepts in subSCT+AMT =", len(dd_subRef.keys()),", Nb of tags =", len(get_tags_in_ref(dd_subRef)), ")")
+
+    print("\nFusion subSCT & subAMT in one reference...")
+    dd_subsubRef = fusion_ref(dd_subSct, dd_subAmt)
+    print("done. (Nb of concepts in subSCT+subAMT =", len(dd_subsubRef.keys()),", Nb of tags =", len(get_tags_in_ref(dd_subsubRef)), ")")
 
     print("\nLoading CUIs list used by [Miftahutdinov et al. 2019]...")
     l_sctFromCadec = get_cui_list("../CADEC/custom_CUI_list.txt")
@@ -608,8 +831,8 @@ if __name__ == '__main__':
     print("loaded.(Nb of mentions in ALL folds for random CADEC =", len(dd_randCadec.keys()),")")
 
     print("\nLoading custom CADEC corpus...")
-    ddd_data = loader_all_custom_cadec_folds("../CADEC/2_Custom_folds/")
-    dd_customCadec = extract_data_without_file(ddd_data)
+    ddd_customData = loader_all_custom_cadec_folds("../CADEC/2_Custom_folds/")
+    dd_customCadec = extract_data_without_file(ddd_customData)
     print("loaded.(Nb of mentions in ALL folds for custom CADEC =", len(dd_customCadec.keys()),")")
 
 
@@ -631,7 +854,56 @@ if __name__ == '__main__':
     s_unknownCuisFromList = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_ref)
     print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromList))
 
+    print("s_unknownCuisFromInit:",s_unknownCuisFromInit)
 
+
+    print("\n\nChecking on subSCT and full AMT:")
+
+    s_unknownCuisFromInitSub = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_subRef)
+    print("\nUnknown concepts in initial CADEC:", len(s_unknownCuisFromInitSub))
+    s_unknownCuisFromRandSub = check_if_cuis_arent_in_ref(s_cuisInRandCadec, dd_subRef)
+    print("Unknown concepts in random CADEC:", len(s_unknownCuisFromRandSub))
+    s_unknownCuisFromCustomSub = check_if_cuis_arent_in_ref(s_cuisInCustomCadec, dd_subRef)
+    print("Unknown concepts in custom CADEC:", len(s_unknownCuisFromCustomSub))
+    s_unknownCuisFromListSub = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_subRef)
+    print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromListSub))
+
+    print("s_unknownCuisFromInitSub:", s_unknownCuisFromInitSub)
+
+
+    print("dif subSCT//SCT:")
+    for cui in s_unknownCuisFromInitSub:
+        if cui not in s_unknownCuisFromInit:
+            print(cui)
+
+
+    print("\n\nChecking on subSCT and subAMT:")
+
+    s_unknownCuisFromInitSubSub = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_subsubRef)
+    print("\nUnknown concepts in initial CADEC:", len(s_unknownCuisFromInitSub))
+    s_unknownCuisFromRandSubSub = check_if_cuis_arent_in_ref(s_cuisInRandCadec, dd_subsubRef)
+    print("Unknown concepts in random CADEC:", len(s_unknownCuisFromRandSub))
+    s_unknownCuisFromCustomSubSub = check_if_cuis_arent_in_ref(s_cuisInCustomCadec, dd_subsubRef)
+    print("Unknown concepts in custom CADEC:", len(s_unknownCuisFromCustomSub))
+    s_unknownCuisFromListSubSub = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_subsubRef)
+    print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromListSub))
+
+
+    print("dif subSubSCTAMT//full:")
+    i=0
+    for cui in s_unknownCuisFromInitSubSub:
+        if cui not in s_unknownCuisFromInit:
+            try:
+                print("-", cui, dd_ref[cui]["label"])
+            except:
+                print(cui)
+            i+=1
+    print(i)
+
+
+
+
+    sys.exit(0)
 
     print(s_unknownCuisFromInit)
     print(s_unknownCuisFromRand)
@@ -648,315 +920,91 @@ if __name__ == '__main__':
 
 
 
-
-
-
-
-
-
-
-
-
-    sys.exit(0)
-
-
-    print("len(dd_sct):", len(dd_sct), "\nlen(l_sctFromCadec):", len(l_sctFromCadec))
-
-
-    s_nil = set()
-    l_cuis = dd_sct.keys()
-    for cuiCadec in l_sctFromCadec:
-        if cuiCadec not in l_cuis:
-            s_nil.add(cuiCadec)
-
-    print(len(s_nil), s_nil)
-
-
-
-
     ################################################
-    print("\n\n\n\nRandom CADEC\n")
+    print("\n\n\n\nBB4:\n")
     ################################################
 
-    ddd_data = loader_all_random_cadec_folds("../CADEC/1_Random_folds_AskAPatient/")
-    print("\nddd_data built.")
-
-    dd_train0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.train")
-    dd_train1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.train")
-    dd_train2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.train")
-    dd_train3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.train")
-    dd_train4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.train")
-    dd_train5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.train")
-    dd_train6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.train")
-    dd_train7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.train")
-    dd_train8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.train")
-    dd_train9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.train")
-
-    dd_dev0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.validation")
-    dd_dev1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.validation")
-    dd_dev2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.validation")
-    dd_dev3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.validation")
-    dd_dev4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.validation")
-    dd_dev5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.validation")
-    dd_dev6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.validation")
-    dd_dev7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.validation")
-    dd_dev8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.validation")
-    dd_dev9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.validation")
-
-    dd_test0 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-0.test")
-    dd_test1 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-1.test")
-    dd_test2 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-2.test")
-    dd_test3 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-3.test")
-    dd_test4 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-4.test")
-    dd_test5 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-5.test")
-    dd_test6 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-6.test")
-    dd_test7 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-7.test")
-    dd_test8 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-8.test")
-    dd_test9 = extract_one_cadec_fold(ddd_data, "AskAPatient.fold-9.test")
-
-    print("Unitary folds built, ex: dd_test0:", dd_test0)
+    print("loading OntoBiotope...")
+    dd_obt = loader_ontobiotope("../BB4/OntoBiotope_BioNLP-OST-2019.obo")
+    print("loaded. (Nb of concepts in SCT =", len(dd_obt.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_obt)), ")")
 
 
-    s_cuisInRandomCadec = set()
-    for file in ddd_data.keys():
-        for id in ddd_data[file]:
-            for cui in ddd_data[file][id]["cui"]:
-                s_cuisInRandomCadec.add(cui)
-
-    print("len(s_cuisInRandomCadec):", len(s_cuisInRandomCadec))
-
-
-
-    ################################################
-    print("\n\n\n\nInitial CADEC\n")
-    ################################################
-
-    ddd_data = loader_all_initial_cadec_folds("../CADEC/0_Original_CADEC/AMT-SCT/")
-    dd_cadec = extract_data_without_file(ddd_data)
-
-    print("test ddd_data['ARTHROTEC.32']:", ddd_data["ARTHROTEC.32"])
-
-    s_cuis = set()
-    l_altCuis = list()
-    compt=0
-    cuiLess = 0
-    for file in ddd_data.keys():
-        for id in ddd_data[file].keys():
-            for cui in ddd_data[file][id]["cui"]:
-                s_cuis.add(cui)
-            if "alt_cui" in ddd_data[file][id].keys():
-                for altCui in ddd_data[file][id]["alt_cui"]:
-                    s_cuis.add(altCui)
-                    l_altCuis.append(altCui)
-            if len(ddd_data[file][id]["cui"]) > 1:
-                compt+=1
-            if ddd_data[file][id]["cui"] == ["CONCEPT_LESS"]:
-                cuiLess+=1
-
-    print("len(s_cuis):", len(s_cuis))
-    print("len(l_altCuis):", len(l_altCuis), l_altCuis)
-    print("multi", compt, "cui LSS:", cuiLess)
-
-
-
-
-
-
-    #Load AMT:
-    dd_amt = loader_amt("../CADEC/AMT_v2.56/Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt")
-
-    s_amt = set()
-    for cui in dd_amt.keys():
-        s_amt.add(cui)
-
-    print(len(s_amt), len(dd_amt.keys()))
-
-
-    print("\n\n")
-
-    cmpInSCT=0
-    cmpInAMT = 0
-    conceptLess = 0
-    Nbmentions = 0
-    wtf = 0
-    s1 = set()
-    s2 = set()
-    s3 = set()
-    for file in ddd_data.keys():
-        for id in ddd_data[file].keys():
-            Nbmentions+=1
-            for cui in ddd_data[file][id]["cui"]:
-                if cui in dd_sct.keys() and cui!="CONCEPT_LESS":
-                    cmpInSCT +=1
-                    s1.add(cui)
-                elif cui in dd_amt.keys() and cui!="CONCEPT_LESS":
-                    cmpInAMT +=1
-                    s2.add(cui)
-                elif cui=="CONCEPT_LESS":
-                    conceptLess += 1
-                else:
-                    wtf+=1
-                    s3.add(cui)
-                    print(file, ddd_data[file][id])
-
-
-
-
-    print(cmpInSCT, cmpInAMT, conceptLess, Nbmentions, wtf)
-    print(len(s1), len(s2), len(s3))
-
-
-
-
-    get_log(dd_cadec, dd_cadec, tag1="Full", tag2="Full")
-
-
-
-
-
-    sys.exit(0)
-
-    ddd_data = loader_all_cadec_folds("../CADEC/2_Custom_folds/")
-    print("\nddd_data built.")
-
-    dd_train0 = extract_one_cadec_fold(ddd_data, "train_0")
-    dd_train1 = extract_one_cadec_fold(ddd_data, "train_1")
-    dd_train2 = extract_one_cadec_fold(ddd_data, "train_2")
-    dd_train3 = extract_one_cadec_fold(ddd_data, "train_3")
-    dd_train4 = extract_one_cadec_fold(ddd_data, "train_4")
-
-    dd_test0 = extract_one_cadec_fold(ddd_data, "test_0")
-    dd_test1 = extract_one_cadec_fold(ddd_data, "test_1")
-    dd_test2 = extract_one_cadec_fold(ddd_data, "test_2")
-    dd_test3 = extract_one_cadec_fold(ddd_data, "test_3")
-    dd_test4 = extract_one_cadec_fold(ddd_data, "test_4")
-
-    print("Unitary folds built, ex: dd_test0:", dd_test0)
-
-    dd_train_data = fusion_folds([dd_train0, dd_train1, dd_train2, dd_train3, dd_train4])
-    dd_test_data = fusion_folds([dd_test0, dd_test1, dd_test2, dd_test3, dd_test4])
-
-    print("Full train fold, and full test fold, built.")
-
-    dd_train_test_0 = fusion_folds([dd_train0, dd_test0])
-    dd_train_test_1 = fusion_folds([dd_train1, dd_test1])
-    dd_train_test_2 = fusion_folds([dd_train2, dd_test2])
-    dd_train_test_3 = fusion_folds([dd_train3, dd_test3])
-    dd_train_test_4 = fusion_folds([dd_train4, dd_test4])
-
-    print("Train/test folds built, ex: dd_train_test_0:", dd_train_test_0)
-
-    dd_full = fusion_folds([dd_train_test_0, dd_train_test_1, dd_train_test_2, dd_train_test_3, dd_train_test_4])
-
-
-    get_log(dd_full, dd_test_data, tag1="Full", tag2="all_test")
-    print("\n\n")
-    get_log(dd_train_data, dd_test_data, tag1="all_train", tag2="all_test")
-    print("\n\n")
-    get_log(dd_train0, dd_test0, tag1="train0", tag2="test0")
-    print("\n\n")
-    get_log(dd_train1, dd_test1, tag1="train1", tag2="test1")
-    print("\n\n")
-    get_log(dd_train2, dd_test2, tag1="train2", tag2="test2")
-    print("\n\n")
-    get_log(dd_train3, dd_test3, tag1="train3", tag2="test3")
-    print("\n\n")
-    get_log(dd_train4, dd_test4, tag1="train4", tag2="test4")
-
-
-
-    ################################################
-    print("\n\n\n\nBB4")
-    ################################################
-
-    from pronto import Ontology
-    onto = Ontology("../BB4/OntoBiotope_BioNLP-OST-2019.obo")
+    print("\nLoading BB4 corpora...")
+    ddd_dataAll = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev", "../BB4/BioNLP-OST-2019_BB-norm_test"])
+    dd_habAll = extract_data(ddd_dataAll, l_type=["Habitat"])
+    print("loaded.(Nb of mentions in whole corpus =", len(dd_habAll.keys()), ")")
 
     ddd_dataTrain = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train"])
+    dd_habTrain = extract_data(ddd_dataTrain, l_type=["Habitat"]) # ["Habitat", "Phenotype", "Microorganism"]
+    print("loaded.(Nb of mentions in train =", len(dd_habTrain.keys()), ")")
+
     ddd_dataDev = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_dev"])
-    ddd_dataTrainDev = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev"])
-    ddd_dataTest = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_test"])
-    ddd_dataAll = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev", "../BB4/BioNLP-OST-2019_BB-norm_test"])
-
-    dd_habTrain = extract_data(ddd_dataTrain, l_type=["Habitat"])
     dd_habDev = extract_data(ddd_dataDev, l_type=["Habitat"])
+    print("loaded.(Nb of mentions in dev =", len(dd_habDev.keys()), ")")
+
+    ddd_dataTrainDev = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_train", "../BB4/BioNLP-OST-2019_BB-norm_dev"])
     dd_habTrainDev = extract_data(ddd_dataTrainDev, l_type=["Habitat"])
+    print("loaded.(Nb of mentions in train+dev =", len(dd_habTrainDev.keys()), ")")
+
+    ddd_dataTest = loader_one_bb4_fold(["../BB4/BioNLP-OST-2019_BB-norm_test"])
     dd_habTest = extract_data(ddd_dataTest, l_type=["Habitat"])
-    dd_habAll = extract_data(ddd_dataAll, l_type=["Habitat"])
-    print(dd_habTrain)
-    print(dd_habTest)
+    print("loaded.(Nb of mentions in test =", len(dd_habTest.keys()), ")")
 
-    get_log(dd_habTrain, dd_habTest, tag1="train_hab", tag2="test_hab")
-    print("\n\n")
-    get_log(dd_habTrain, dd_habDev, tag1="train_hab", tag2="dev_hab")
-    print("\n\n")
-    get_log(dd_habTrainDev, dd_habTest, tag1="train+dev_hab", tag2="test_hab")
+
+    print("\nLoading cuis set in corpus...")
+    s_cuisHabTrain = get_cuis_set_from_corpus(dd_habTrain)
+    s_cuisHabDev = get_cuis_set_from_corpus(dd_habDev)
+    s_cuisHabTrainDev = get_cuis_set_from_corpus(dd_habTrainDev)
+    print("Loaded.(Nb of distinct used concepts in train/dev/train+dev hab corpora =", len(s_cuisHabTrain),len(s_cuisHabDev),len(s_cuisHabTrainDev),")")
+
+
+    print("\nChecking:")
+    s_unknownHabCuisTrain = check_if_cuis_arent_in_ref(s_cuisHabTrain, dd_obt)
+    s_unknownHabCuisDev = check_if_cuis_arent_in_ref(s_cuisHabDev, dd_obt)
+    s_unknownHabCuisTrainDev = check_if_cuis_arent_in_ref(s_cuisHabTrainDev, dd_obt)
+    print("\nUnknown concepts in train/dev/train+dev hab corpora:", len(s_unknownHabCuisTrain),len(s_unknownHabCuisDev),len(s_unknownHabCuisTrainDev))
 
 
 
     ################################################
-    print("\n\n\n\nNCBI")
+    print("\n\n\n\nNCBI:\n")
     ################################################
 
+    print("loading MEDIC...")
     dd_medic = loader_medic("../NCBI/FixedVersion/CTD_diseases_DNorm_v2012_07_6_fixed.tsv")
-    nbConcepts = len(dd_medic.keys())
-    print("\nNumber of concepts in MEDIC:", nbConcepts)
-
-    # Fields in MEDIC file:
-    # DiseaseName	DiseaseID	AltDiseaseIDs	Definition	ParentIDs	TreeNumbers	ParentTreeNumbers	Synonyms
-    # In trainset: 2792129	158	178	recurrent meningitis	SpecificDisease	D008581+D012008
-
-    # For initial MEDIC/datasets, some alternative CUIs are used in the corpus...
-    s_medic = set(dd_medic.keys())
-    s_alt = set()
-    s_inter = set()
-    s_both = set(dd_medic.keys())
-    for cui in dd_medic.keys():
-        if "alt_cui" in dd_medic[cui].keys():
-            for altCui in dd_medic[cui]["alt_cui"]:
-                s_both.add(altCui)
-                if altCui not in s_medic:
-                    s_alt.add(altCui)
-                else:
-                    s_inter.add(cui+"/"+altCui)
-
-    print("Number of alternative CUIs in MEDIC:", len(s_alt))
-    print("Number of CUIs in MEDIC (main+alternative)", len(s_both))
-    print("Sibling concepts in MEDIC used in the NCBI dataset:", s_inter)
+    print("loaded. (Nb of concepts in SCT =", len(dd_medic.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_medic)), ")")
 
 
-    print("\n\n")
-
-
+    print("\nLoading NCBI corpora...")
     ddd_dataFull = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt", "../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
     dd_Full = extract_data(ddd_dataFull, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print("Number of examples/mentions in Full dataset: ", len(dd_Full.keys()))
+    print("loaded.(Nb of mentions in full corpus =", len(dd_Full.keys()), ")")
 
     ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt"])
     dd_Train = extract_data(ddd_dataTrain, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print(id, len(dd_Train.keys()))
+    print("loaded.(Nb of mentions in train corpus =", len(dd_Train.keys()), ")")
 
     ddd_dataDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
     dd_Dev = extract_data(ddd_dataDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print(len(dd_Dev.keys()))
+    print("loaded.(Nb of mentions in dev corpus =", len(dd_Dev.keys()), ")")
 
     ddd_dataTrainDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
     dd_TrainDev = extract_data(ddd_dataTrainDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print(len(dd_TrainDev.keys()))
+    print("loaded.(Nb of mentions in train+dev corpus =", len(dd_TrainDev.keys()), ")")
 
     ddd_dataTest = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
     dd_Test = extract_data(ddd_dataTest, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
-    print(len(dd_Test.keys()))
+    print("loaded.(Nb of mentions in test corpus =", len(dd_Test.keys()), ")")
 
 
-    get_log(dd_Train, dd_Dev, tag1="train", tag2="dev")
-    print("\n\n")
-    get_log(dd_TrainDev, dd_Test, tag1="train+dev", tag2="test")
-    print("\n\n")
-    get_log(dd_Train, dd_Test, tag1="train", tag2="test")
-    print("\n\n")
-    get_log(dd_Full, dd_Test, tag1="Full", tag2="test")
+    print("\nLoading cuis set in corpus...")
+    s_cuis = get_cuis_set_from_corpus(dd_Full)
+    print("Loaded.(Nb of distinct used concepts in full corpus =", len(s_cuis), ")")
 
 
-    sys.exit(0)
+    print("\nChecking:")
+    s_unknownCuis = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_medic)
+    print("\nUnknown concepts in full NCBI corpus:", len(s_unknownCuis))
+
+
 
