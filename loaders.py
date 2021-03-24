@@ -152,6 +152,7 @@ def loader_amt(filePath):
                         else:
                             cui = l_line[0]
                             dd_amt[cui] = dict()
+
                             dd_amt[cui]["label"] = l_line[2]
 
                 i+=1
@@ -187,29 +188,51 @@ def loader_medic(filePath):
 
     dd_medic = dict()
 
-    if isfile(filePath):
-        with open(filePath, encoding="utf8") as file:
+    with open(filePath, encoding="utf8") as file:
 
-            for line in file:
+        requestMESH = re.compile('MESH:(.+)$')
+        requestOMIM = re.compile('OMIM:(.+)$')
+
+        for line in file:
+
+            if line[0] != '#': #commentary lines
 
                 l_line = line.split('\t')
 
-                try:
-                    cui = l_line[1]
-                    if cui == "DiseaseID":
-                        pass
-                    else:
-                        dd_medic[cui]=dict()
+                cui = l_line[1]
+                mMESH = requestMESH.match(cui)
+                if mMESH:
+                    shortCui = mMESH.group(1)
+                else:  # OMIM
+                    shortCui = cui
 
-                        dd_medic[cui]["label"] = l_line[0]
-                        if len(l_line[2]) > 0:
-                            dd_medic[cui]["alt_cui"] = l_line[2].split('|')
+                dd_medic[shortCui]=dict()
 
-                        dd_medic[cui]["tags"] = l_line[7].rstrip().split('|')
-                        dd_medic[cui]["parents"] = l_line[4].split('|')
+                dd_medic[shortCui]["label"] = l_line[0]
 
-                except:
-                    pass
+                if len(l_line[2]) > 0:
+                    dd_medic[shortCui]["alt_cui"] = list()
+                    l_altCuis = l_line[2].split('|')
+                    for altCui in l_altCuis:
+                        mMESH = requestMESH.match(altCui)
+                        if mMESH:
+                            shortAltCui = mMESH.group(1)
+                            dd_medic[shortCui]["alt_cui"].append(shortAltCui)
+                        else: #OMIM
+                            dd_medic[shortCui]["alt_cui"].append(altCui)
+
+                dd_medic[shortCui]["tags"] = l_line[7].rstrip().split('|')
+
+                if len(l_line[4]) > 0:
+                    l_parents = l_line[4].split('|')
+                    dd_medic[shortCui]["parents"] = list()
+                    for parentCui in l_parents:
+                        mMESH = requestMESH.match(parentCui)
+                        if mMESH:
+                            shortParentCui = mMESH.group(1)
+                            dd_medic[shortCui]["parents"].append(shortParentCui)
+                        else: #OMIM
+                            dd_medic[shortCui]["alt_cui"].append(parentCui)
 
 
     return dd_medic
@@ -475,62 +498,176 @@ def loader_one_ncbi_fold(l_foldPath):
     i = 0
     for foldPath in l_foldPath:
 
-        if isfile(foldPath):
-            with open(foldPath, encoding="utf8") as file:
+        with open(foldPath, encoding="utf8") as file:
 
-                fileNameWithoutExt, ext = splitext(basename(foldPath))
-                ddd_data[fileNameWithoutExt] = dict()
+            fileNameWithoutExt, ext = splitext(basename(foldPath))
+            ddd_data[fileNameWithoutExt] = dict()
 
-                notInDoc = True
-                nextAreMentions = False
-                for line in file:
+            notInDoc = True
+            nextAreMentions = False
+            for line in file:
 
-                    if line == '\n' and nextAreMentions == True and notInDoc == False:
-                        notInDoc = True
-                        nextAreMentions = False
+                if line == '\n' and nextAreMentions == True and notInDoc == False:
+                    notInDoc = True
+                    nextAreMentions = False
 
 
-                    if nextAreMentions == True and notInDoc == False:
-                        l_line = line.split('\t')
+                if nextAreMentions == True and notInDoc == False:
+                    l_line = line.split('\t')
 
-                        exampleId = "ncbi_" + "{number:06}".format(number=i)
-                        ddd_data[fileNameWithoutExt][exampleId] = dict()
+                    exampleId = "ncbi_" + "{number:06}".format(number=i)
+                    ddd_data[fileNameWithoutExt][exampleId] = dict()
 
-                        ddd_data[fileNameWithoutExt][exampleId]["mention"] = l_line[3]
-                        ddd_data[fileNameWithoutExt][exampleId]["type"] = l_line[4]
+                    ddd_data[fileNameWithoutExt][exampleId]["mention"] = l_line[3]
+                    ddd_data[fileNameWithoutExt][exampleId]["type"] = l_line[4]
 
-                        #Parfois une liste de CUIs (des '|' ou des '+'):
-                        cuis = l_line[5].rstrip()
-                        request11 = re.compile('.*\|.*')
-                        request12 = re.compile('.*\+.*')
-                        if request11.match(cuis):
-                            l_cuis = cuis.split('|')
+                    #Parfois une liste de CUIs (des '|' ou des '+'):
+                    cuis = l_line[5].rstrip()
+                    request11 = re.compile('.*\|.*')
+                    request12 = re.compile('.*\+.*')
+                    if request11.match(cuis): #Maybe directly delete theses mentions...
+                        l_cuis = cuis.split('|')
 
-                            # The first CUI is choose;
-                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = [l_cuis[0]]
+                        # The first CUI is choose;
+                        ddd_data[fileNameWithoutExt][exampleId]["cui"] = [l_cuis[0].strip()]
 
-                            # If supplementary CUIs are alternative CUIs (imply a kind of ambiguity...):
-                            ddd_data[fileNameWithoutExt][exampleId]["alt_cui"] = l_cuis[1:]
+                        # If supplementary CUIs are alternative CUIs (imply a kind of ambiguity...):
+                        ddd_data[fileNameWithoutExt][exampleId]["alt_cui"] = l_cuis[1:]
 
-                        elif request12.match(cuis):
-                            l_cuis = cuis.split('+') #multi-normalization
-                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
+                    elif request12.match(cuis):
+                        l_cuis = cuis.split('+') #multi-normalization
+                        ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
+                    else:
+                        if cuis.strip()=="MESH:C535662": # FORMATING ERROR in the initial testfold file of the NCBI Disease Corpus...
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = ["C535662"]
                         else:
-                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = [cuis]
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = [cuis.strip()]
 
-                        i+=1
+                    i+=1
 
 
-                    request2 = re.compile('^\d*\|a\|')
-                    if nextAreMentions==False and request2.match(line) is not None:
-                        nextAreMentions = True
+                request2 = re.compile('^\d*\|a\|')
+                if nextAreMentions==False and request2.match(line) is not None:
+                    nextAreMentions = True
 
-                    request3 = re.compile('^\d*\|t\|')
-                    if notInDoc==True and request3.match(line) is not None:
-                        notInDoc = False
+                request3 = re.compile('^\d*\|t\|')
+                if notInDoc==True and request3.match(line) is not None:
+                    notInDoc = False
 
 
     return ddd_data
+
+
+def replace_altCui_by_main_cui(s_unknownCuis, dd_medic, txtFileNCBI, fixedTxtFileNCBI):
+    # 1/ Search unknown CUIs which are only present in alternative CUIs in MEDIC,
+    # And find the main associated CUI for them in MEDIC:
+    lc_targetCuisAndToReplaceCuis = set()
+    for unknownCui in s_unknownCuis:
+        if unknownCui not in dd_medic.keys():
+
+            for cui in dd_medic.keys():
+                if "alt_cui" in dd_medic[cui].keys():
+                    for altCui in dd_medic[cui]["alt_cui"]:
+
+                        if altCui == unknownCui:
+                            lc_targetCuisAndToReplaceCuis.add((cui, unknownCui))
+
+    # 2/ Replace in a new NCBI corpus fold file:
+    with open(fixedTxtFileNCBI, 'w', encoding="utf8") as outputFile:
+        with open(txtFileNCBI, encoding="utf8") as fileNCBI:
+
+            nbCorrections=0
+            nbDeletions=0
+
+            notInDoc = True
+            nextAreMentions = False
+
+            for line in fileNCBI:
+
+                newLine = ""
+
+                if line == '\n' and nextAreMentions == True and notInDoc == False:
+                    notInDoc = True
+                    nextAreMentions = False
+                    newLine = line
+
+                if nextAreMentions == True and notInDoc == False:
+                    l_line = line.split('\t')
+
+                    # Parfois une liste de CUIs (des '|' ou des '+'):
+                    cuis = l_line[5].rstrip()
+                    request11 = re.compile('.*\|.*')
+                    request12 = re.compile('.*\+.*')
+
+
+                    # Some CUIs are possible for correct prediction here (ambiguities... so erased):
+                    if request11.match(cuis):
+                        nbDeletions+=1
+                        continue
+
+
+                    # Multi-norm cases:
+                    elif request12.match(cuis):
+                        l_cuis = cuis.split('+')  # multi-normalization
+                        toModify = False
+                        for k, cui in enumerate(l_cuis):
+                            for couple in lc_targetCuisAndToReplaceCuis:
+                                if couple[1] == cui:
+                                    l_cuis[k] = couple[0]
+                                    toModify = True
+
+                        if toModify == True:
+                            newCuisInLine = ""
+                            for k, cui in enumerate(l_cuis):
+                                if k == (len(l_cuis) - 1):
+                                    newCuisInLine = newCuisInLine + l_cuis[k]
+                                else:
+                                    newCuisInLine = newCuisInLine + l_cuis[k] + '+'
+                            l_line[5] = newCuisInLine + '\n'
+
+                            for i, bloc in enumerate(l_line):
+                                if i == (len(l_line) - 1):
+                                    newLine = newLine + bloc + '\n'
+                                else:
+                                    newLine = newLine + bloc + '\t'
+
+
+                    else:
+                        cui = cuis
+                        toModify = False
+                        for couple in lc_targetCuisAndToReplaceCuis:
+                            if couple[1] == cui:
+                                l_line[5] = couple[0]
+                                toModify = True
+                        if toModify == True:
+                            for i, bloc in enumerate(l_line):
+                                if i == (len(l_line) - 1):
+                                    newLine = newLine + bloc + '\n'
+                                else:
+                                    newLine = newLine + bloc + '\t'
+
+                    if newLine=="":
+                        newLine=line
+                    else:
+                        nbCorrections+=1
+                        #print("newLine", newLine, "------ line:", line, "$")
+
+
+                request2 = re.compile('^\d*\|a\|')
+                if nextAreMentions == False and request2.match(line) is not None:
+                    nextAreMentions = True
+                    newLine = line
+
+                request3 = re.compile('^\d*\|t\|')
+                if notInDoc == True and request3.match(line) is not None:
+                    notInDoc = False
+                    newLine = line
+
+
+                # New file writing:
+                outputFile.write(newLine)
+
+    print("Fixed CBI Disease Corpus saved (", nbCorrections, "corrections and", nbDeletions, "deletions).")
 
 
 ###################################################
@@ -615,28 +752,58 @@ def select_subpart_hierarchy(dd_ref, newRootCui):
 
 
 
-def select_subpart_with_patterns_in_label(dd_ref, l_patterns=["(trade product)", "(medicinal product)"]):
+def select_subpart_with_patterns_in_label(dd_ref):
     dd_subpart = dict()
 
     """
     l_metacarac = ['.', '^', '$', '*', '+', '?', '{', '}', '[', ']', '\\', '|', '(', ')']
-    print(l_metacarac)
-    request = re.compile('')
     """
 
-    # 100%: “(medicinal product)”, “(AU substance)”, “(trade product unit of use)” or “(medicinal product unit of use)”.
-    request1 = re.compile('.*\(trade product\).*')
-    request2 = re.compile('.*\(medicinal product\).*')
-    request3 = re.compile('.*\(AU substance\).*')
-    request4 = re.compile('.*\(trade product unit of use\).*')
-    request5 = re.compile('.*\(medicinal product unit of use\).*')
+    # 100% in corpus: "(trade product)", “(medicinal product)”, “(AU substance)”, “(trade product unit of use)” or “(medicinal product unit of use)”.
+    request1 = re.compile('(.*) \(trade product\).*')
+    request2 = re.compile('(.*) \(medicinal product\).*')
+    request3 = re.compile('(.*) \(AU substance\).*')
+    request4 = re.compile('(.*) \(trade product unit of use\).*')
+    request5 = re.compile('(.*) \(medicinal product unit of use\).*')
+
     for cui in dd_ref.keys():
-        if request1.match(dd_ref[cui]["label"]) or request2.match(dd_ref[cui]["label"]) or request3.match(dd_ref[cui]["label"]) or request4.match(dd_ref[cui]["label"]) or request5.match(dd_ref[cui]["label"]):
+
+        m1 = request1.match(dd_ref[cui]["label"])
+        m2 = request2.match(dd_ref[cui]["label"])
+        m3 = request3.match(dd_ref[cui]["label"])
+        m4 = request4.match(dd_ref[cui]["label"])
+        m5 = request5.match(dd_ref[cui]["label"])
+
+        if m1 or m2 or m3 or m4 or m5:
             dd_subpart[cui] = copy.deepcopy(dd_ref[cui])
 
-    # Clear the labels from its pattern:
+            if m1:
+                tags = m1.group(1)
+                dd_subpart[cui]["type"] = "trade product"
+            elif m2:
+                tags = m2.group(1)
+                dd_subpart[cui]["type"] = "medicinal product"
+            elif m3:
+                tags = m3.group(1)
+                dd_subpart[cui]["type"] = "AU substance"
+            elif m4:
+                tags = m4.group(1)
+                dd_subpart[cui]["type"] = "trade product unit of use"
+            elif m5:
+                tags = m5.group(1)
+                dd_subpart[cui]["type"] = "medicinal product unit of use"
 
 
+            # In the file Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt, there are '|' separators between tags (need confirmation on this...):
+            l_labelAndTags = tags.split(' | ')
+            if len(l_labelAndTags) > 1:
+                dd_subpart[cui]["tag"] = list()
+
+            for i, tag in enumerate(l_labelAndTags):
+                if i == 0:
+                    dd_subpart[cui]["label"] = tag
+                else:
+                    dd_subpart[cui]["tag"].append(tag)
 
     return dd_subpart
 
@@ -750,8 +917,7 @@ def check_if_cuis_arent_in_ref(s_cuis, dd_ref):
 # Test section
 #######################################################################################################
 if __name__ == '__main__':
-
-
+    """
     ################################################
     print("\n\n\nCADEC (3 datasets):\n")
     ################################################
@@ -768,39 +934,14 @@ if __name__ == '__main__':
 
     write_ref(dd_subSct, "../CADEC/clinicalFindingSubPart.csv")
 
-    sys.exit(0)
-
-
 
     print("loading AMTv2.56...")
     dd_amt = loader_amt("../CADEC/AMT_v2.56/Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt")
     print("loaded. (Nb of concepts in AMT =", len(dd_amt.keys()),", Nb of tags =", len(get_tags_in_ref(dd_amt)), ")")
 
-    print("\nExtracting all Trade Product from AMT:")
-    l_pat = ["(trade product)"] #["(trade product)", "(medicinal product)"]
-    dd_subAmt = select_subpart_with_patterns_in_label(dd_amt, l_patterns=l_pat)
-    print("Done. (Nb of concepts in this subpart AMT (", l_pat, ") =", len(dd_subAmt.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_subAmt)), ")")
-
-
-    request1 = re.compile('.+(\(.+\))$')
-    s_types = set()
-    for i, cui in enumerate(dd_amt.keys()):
-        m = request1.match(dd_amt[cui]["label"])
-        if m:
-            s_types.add(m.group(1))
-
-    print(len(s_types), s_types)
-
-
-
-
-
-
-
-
-
-    sys.exit(0)
-
+    print("\nExtracting sub- AMT:")
+    dd_subAmt = select_subpart_with_patterns_in_label(dd_amt)
+    print("Done. (Nb of concepts in this subpart AMT =", len(dd_subAmt.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_subAmt)), ")")
 
 
     print("\nFusion SCT & AMT in one reference...")
@@ -845,8 +986,9 @@ if __name__ == '__main__':
 
     print("\n\nChecking:")
 
+    print("\n\nChecking on full SCT and full AMT:")
     s_unknownCuisFromInit = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_ref)
-    print("\nUnknown concepts in initial CADEC:", len(s_unknownCuisFromInit))
+    print("Unknown concepts in initial CADEC:", len(s_unknownCuisFromInit))
     s_unknownCuisFromRand = check_if_cuis_arent_in_ref(s_cuisInRandCadec, dd_ref)
     print("Unknown concepts in random CADEC:", len(s_unknownCuisFromRand))
     s_unknownCuisFromCustom = check_if_cuis_arent_in_ref(s_cuisInCustomCadec, dd_ref)
@@ -854,13 +996,10 @@ if __name__ == '__main__':
     s_unknownCuisFromList = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_ref)
     print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromList))
 
-    print("s_unknownCuisFromInit:",s_unknownCuisFromInit)
-
 
     print("\n\nChecking on subSCT and full AMT:")
-
     s_unknownCuisFromInitSub = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_subRef)
-    print("\nUnknown concepts in initial CADEC:", len(s_unknownCuisFromInitSub))
+    print("Unknown concepts in initial CADEC:", len(s_unknownCuisFromInitSub))
     s_unknownCuisFromRandSub = check_if_cuis_arent_in_ref(s_cuisInRandCadec, dd_subRef)
     print("Unknown concepts in random CADEC:", len(s_unknownCuisFromRandSub))
     s_unknownCuisFromCustomSub = check_if_cuis_arent_in_ref(s_cuisInCustomCadec, dd_subRef)
@@ -868,19 +1007,15 @@ if __name__ == '__main__':
     s_unknownCuisFromListSub = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_subRef)
     print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromListSub))
 
-    print("s_unknownCuisFromInitSub:", s_unknownCuisFromInitSub)
-
-
-    print("dif subSCT//SCT:")
+    print("Concepts in initial CADEC corpus which are not in the Clinical Finding hierarchy of SCT-AU:")
     for cui in s_unknownCuisFromInitSub:
         if cui not in s_unknownCuisFromInit:
-            print(cui)
+            print(cui, dd_ref[cui]["label"], end=", ")
 
 
     print("\n\nChecking on subSCT and subAMT:")
-
     s_unknownCuisFromInitSubSub = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_subsubRef)
-    print("\nUnknown concepts in initial CADEC:", len(s_unknownCuisFromInitSub))
+    print("Unknown concepts in initial CADEC:", len(s_unknownCuisFromInitSub))
     s_unknownCuisFromRandSubSub = check_if_cuis_arent_in_ref(s_cuisInRandCadec, dd_subsubRef)
     print("Unknown concepts in random CADEC:", len(s_unknownCuisFromRandSub))
     s_unknownCuisFromCustomSubSub = check_if_cuis_arent_in_ref(s_cuisInCustomCadec, dd_subsubRef)
@@ -888,35 +1023,10 @@ if __name__ == '__main__':
     s_unknownCuisFromListSubSub = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_subsubRef)
     print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromListSub))
 
-
-    print("dif subSubSCTAMT//full:")
-    i=0
+    print("Concepts in initial CADEC corpus which are not in th selected subpart of AMT (see select_subpart_with_patterns_in_label function):")
     for cui in s_unknownCuisFromInitSubSub:
-        if cui not in s_unknownCuisFromInit:
-            try:
-                print("-", cui, dd_ref[cui]["label"])
-            except:
-                print(cui)
-            i+=1
-    print(i)
-
-
-
-
-    sys.exit(0)
-
-    print(s_unknownCuisFromInit)
-    print(s_unknownCuisFromRand)
-    print("---------------------")
-    for cui in s_unknownCuisFromRand:
-        if cui not in s_unknownCuisFromInit:
-            print(cui)
-
-    for file in ddd_randData.keys():
-        for id in ddd_randData[file].keys():
-            for cui in ddd_randData[file][id]["cui"]:
-                if cui == "21499005" or cui == "81680008":
-                    print(file, id, dd_randCadec[id])
+        if cui not in s_unknownCuisFromInitSub:
+            print(cui, dd_ref[cui]["label"], end=", ")
 
 
 
@@ -927,6 +1037,10 @@ if __name__ == '__main__':
     print("loading OntoBiotope...")
     dd_obt = loader_ontobiotope("../BB4/OntoBiotope_BioNLP-OST-2019.obo")
     print("loaded. (Nb of concepts in SCT =", len(dd_obt.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_obt)), ")")
+
+    print("\nExtracting Bacterial Habitat hierarchy:")
+    dd_habObt = select_subpart_hierarchy(dd_obt, 'OBT:000001')
+    print("Done. (Nb of concepts in this subpart of OBT =", len(dd_habObt.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_habObt)), ")")
 
 
     print("\nLoading BB4 corpora...")
@@ -959,52 +1073,122 @@ if __name__ == '__main__':
 
 
     print("\nChecking:")
-    s_unknownHabCuisTrain = check_if_cuis_arent_in_ref(s_cuisHabTrain, dd_obt)
-    s_unknownHabCuisDev = check_if_cuis_arent_in_ref(s_cuisHabDev, dd_obt)
-    s_unknownHabCuisTrainDev = check_if_cuis_arent_in_ref(s_cuisHabTrainDev, dd_obt)
+    s_unknownHabCuisTrain = check_if_cuis_arent_in_ref(s_cuisHabTrain, dd_habObt)
+    s_unknownHabCuisDev = check_if_cuis_arent_in_ref(s_cuisHabDev, dd_habObt)
+    s_unknownHabCuisTrainDev = check_if_cuis_arent_in_ref(s_cuisHabTrainDev, dd_habObt)
     print("\nUnknown concepts in train/dev/train+dev hab corpora:", len(s_unknownHabCuisTrain),len(s_unknownHabCuisDev),len(s_unknownHabCuisTrainDev))
 
-
+    """
 
     ################################################
     print("\n\n\n\nNCBI:\n")
     ################################################
 
     print("loading MEDIC...")
-    dd_medic = loader_medic("../NCBI/FixedVersion/CTD_diseases_DNorm_v2012_07_6_fixed.tsv")
-    print("loaded. (Nb of concepts in SCT =", len(dd_medic.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_medic)), ")")
+    dd_medic = loader_medic("../NCBI/CTD_diseases_DNorm_v2012_07_6.tsv")
+    print("loaded. (Nb of concepts in MEDIC =", len(dd_medic.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_medic)), ")")
 
+
+    print("\nInitial NCBI Disease Corpus:\n")
 
     print("\nLoading NCBI corpora...")
-    ddd_dataFull = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt", "../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
+    ddd_dataFull = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt", "../NCBI/Voff/NCBIdevelopset_corpus.txt", "../NCBI/Voff/NCBItestset_corpus.txt"])
     dd_Full = extract_data(ddd_dataFull, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print("loaded.(Nb of mentions in full corpus =", len(dd_Full.keys()), ")")
 
-    ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt"])
+    ddd_dataTrain = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt"])
     dd_Train = extract_data(ddd_dataTrain, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print("loaded.(Nb of mentions in train corpus =", len(dd_Train.keys()), ")")
 
-    ddd_dataDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
+    ddd_dataDev = loader_one_ncbi_fold(["../NCBI/Voff/NCBIdevelopset_corpus.txt"])
     dd_Dev = extract_data(ddd_dataDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print("loaded.(Nb of mentions in dev corpus =", len(dd_Dev.keys()), ")")
 
-    ddd_dataTrainDev = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus.txt"])
+    ddd_dataTrainDev = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt", "../NCBI/Voff/NCBIdevelopset_corpus.txt"])
     dd_TrainDev = extract_data(ddd_dataTrainDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print("loaded.(Nb of mentions in train+dev corpus =", len(dd_TrainDev.keys()), ")")
 
-    ddd_dataTest = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
+    ddd_dataTest = loader_one_ncbi_fold(["../NCBI/Voff/NCBItestset_corpus.txt"])
     dd_Test = extract_data(ddd_dataTest, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print("loaded.(Nb of mentions in test corpus =", len(dd_Test.keys()), ")")
 
 
     print("\nLoading cuis set in corpus...")
-    s_cuis = get_cuis_set_from_corpus(dd_Full)
-    print("Loaded.(Nb of distinct used concepts in full corpus =", len(s_cuis), ")")
+    s_cuisNCBIFull = get_cuis_set_from_corpus(dd_Full)
+    s_cuisNCBITrain = get_cuis_set_from_corpus(dd_Train)
+    s_cuisNCBIDev = get_cuis_set_from_corpus(dd_Dev)
+    s_cuisNCBITrainDev = get_cuis_set_from_corpus(dd_TrainDev)
+    s_cuisNCBITest = get_cuis_set_from_corpus(dd_Test)
+    print("Loaded.(Nb of distinct used concepts in Full/train/dev/train+dev/test NCBI folds =", len(s_cuisNCBIFull),len(s_cuisNCBITrain),len(s_cuisNCBIDev),len(s_cuisNCBITrainDev),len(s_cuisNCBITest),")")
 
 
     print("\nChecking:")
-    s_unknownCuis = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_medic)
-    print("\nUnknown concepts in full NCBI corpus:", len(s_unknownCuis))
+    s_unknownNCBICuisFull = check_if_cuis_arent_in_ref(s_cuisNCBIFull, dd_medic)
+    s_unknownNCBICuisTrain = check_if_cuis_arent_in_ref(s_cuisNCBITrain, dd_medic)
+    s_unknownNCBICuisDev = check_if_cuis_arent_in_ref(s_cuisNCBIDev, dd_medic)
+    s_unknownNCBICuisTrainDev = check_if_cuis_arent_in_ref(s_cuisNCBITrainDev, dd_medic)
+    s_unknownNCBICuisTest = check_if_cuis_arent_in_ref(s_cuisNCBITest, dd_medic)
+    print("\nUnknown concepts in Full/train/dev/train+dev/test NCBI folds:", len(s_unknownNCBICuisFull),len(s_unknownNCBICuisTrain),len(s_unknownNCBICuisDev),len(s_unknownNCBICuisTrainDev), len(s_unknownNCBICuisTest))
+    print("All Unknown concepts:", s_unknownNCBICuisFull)
+
+
+    print("\n\n")
+
+
+    print("Fixed NCBI Disease Corpus:\n")
+
+
+    print("Generate fixed versions of the 3 folds...")
+    replace_altCui_by_main_cui(s_unknownNCBICuisTrain, dd_medic, "../NCBI/Voff/NCBItrainset_corpus.txt", "../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt")
+    replace_altCui_by_main_cui(s_unknownNCBICuisDev, dd_medic, "../NCBI/Voff/NCBIdevelopset_corpus.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus_fixed.txt")
+    replace_altCui_by_main_cui(s_unknownNCBICuisTest, dd_medic, "../NCBI/Voff/NCBItestset_corpus.txt", "../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt")
+
+
+    print("\nLoading Fixed NCBI corpora...")
+    ddd_dataFullFixed = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
+
+    dd_FullFixed = extract_data(ddd_dataFullFixed, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("loaded.(Nb of mentions in full corpus =", len(dd_FullFixed.keys()), ")")
+
+    ddd_dataTrainFixed = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt"])
+    dd_TrainFixed = extract_data(ddd_dataTrainFixed, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("loaded.(Nb of mentions in train corpus =", len(dd_TrainFixed.keys()), ")")
+
+    ddd_dataDevFixed = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBIdevelopset_corpus_fixed.txt"])
+    dd_DevFixed = extract_data(ddd_dataDevFixed, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("loaded.(Nb of mentions in dev corpus =", len(dd_DevFixed.keys()), ")")
+
+    ddd_dataTrainDevFixed = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItrainset_corpus_fixed.txt", "../NCBI/FixedVersion/NCBIdevelopset_corpus_fixed.txt"])
+    dd_TrainDevFixed = extract_data(ddd_dataTrainDevFixed, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("loaded.(Nb of mentions in train+dev corpus =", len(dd_TrainDevFixed.keys()), ")")
+
+    ddd_dataTestFixed = loader_one_ncbi_fold(["../NCBI/FixedVersion/NCBItestset_corpus_fixed.txt"])
+    dd_TestFixed = extract_data(ddd_dataTestFixed, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("loaded.(Nb of mentions in test corpus =", len(dd_TestFixed.keys()), ")")
+
+
+    print("\nLoading cuis set in corpus...")
+    s_cuisNCBIFullFixed = get_cuis_set_from_corpus(dd_FullFixed)
+    s_cuisNCBITrainFixed = get_cuis_set_from_corpus(dd_TrainFixed)
+    s_cuisNCBIDevFixed = get_cuis_set_from_corpus(dd_DevFixed)
+    s_cuisNCBITrainDevFixed = get_cuis_set_from_corpus(dd_TrainDevFixed)
+    s_cuisNCBITestFixed = get_cuis_set_from_corpus(dd_TestFixed)
+    print("Loaded.(Nb of distinct used concepts in Full/train/dev/train+dev/test NCBI folds =", len(s_cuisNCBIFullFixed),len(s_cuisNCBITrainFixed),len(s_cuisNCBIDevFixed),len(s_cuisNCBITrainDevFixed),len(s_cuisNCBITestFixed),")")
+
+
+    print("\nLoading cuis set in corpus...")
+    s_cuisFixed = get_cuis_set_from_corpus(dd_FullFixed)
+    print("Loaded.(Nb of distinct used concepts in full corpus =", len(s_cuisFixed), ")")
+
+
+    print("\nChecking:")
+    s_unknownCuisFixed = check_if_cuis_arent_in_ref(s_cuisFixed, dd_medic)
+    print("\nUnknown concepts in full NCBI corpus:", len(s_unknownCuisFixed))
+    print(s_unknownCuisFixed)
+
+
+
+
 
 
 
