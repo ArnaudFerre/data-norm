@@ -244,11 +244,6 @@ def loader_medic(filePath):
 ###################################################
 
 def loader_all_custom_cadec_folds(repPath):
-    """
-    Description:
-    :param repPath:
-    :return:
-    """
 
     ddd_data = dict()
 
@@ -1265,8 +1260,8 @@ if __name__ == '__main__':
 
 
     print("\n\nLoading initial CADEC corpus...")
-    correct_initial_cadec_2016("../CADEC/0_Initial_CADEC/CADEC_2_2016/sct/", "../CADEC/4_MyCADEC/")
-    ddd_data = loader_all_initial_cadec_folds("../CADEC/4_MyCADEC/", "../CADEC/0_Initial_CADEC/CADEC_2_2016/original/")
+    correct_initial_cadec_2016("../CADEC/0_Initial_CADEC/CADEC_2_2016/sct/", "../CADEC/3_MyCADEC/")
+    ddd_data = loader_all_initial_cadec_folds("../CADEC/3_MyCADEC/", "../CADEC/0_Initial_CADEC/CADEC_2_2016/original/")
     dd_initCadecDrugs = extract_data(ddd_data, l_type=["Drug"])
     dd_initCadecClinicalFindings = extract_data(ddd_data, l_type=["ADR", "Finding", "Disease", "Symptom"])
     dd_initCadec = extract_data_without_file(ddd_data)
