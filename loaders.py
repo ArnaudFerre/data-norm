@@ -34,12 +34,13 @@ from pronto import Ontology
 # Reference loaders:
 ###################################################
 
-def loader_snomed_ct_au(descriptionFilePath, languageFilePath, relationFilePath, l_select=['900000000000207008', '900000000000012004', '32506021000036107', '32570491000036106', '161771000036108']):
+def loader_snomed_ct_au(descriptionFilePath, languageFilePath, relationFilePath):
 
     # Extract IsA from relationships files.
     # It seems that 116680003 is the typeId of IsA relation (src: https://confluence.ihtsdotools.org/display/DOCGLOSS/relationship+type)
     # 280844000	71737002
     # moduleId= '900000000000012004', '32506021000036107', '32570491000036106' & 161771000036108 seem to be NOT relevant to CADEC normalization task...
+    # Meaning of l_select=['900000000000207008', '900000000000012004', '32506021000036107', '32570491000036106', '161771000036108']
 
     dd_sct = dict()
 
@@ -51,18 +52,17 @@ def loader_snomed_ct_au(descriptionFilePath, languageFilePath, relationFilePath,
             if i > 0: #Not taking into account the first line of the file
                 l_line = line.split('\t')
 
-                if l_line[3] in l_select:
-                    if l_line[2] == '1':
+                if l_line[2] == '1':
 
-                        id = l_line[0]
-                        dd_description[id] = dict()
-                        dd_description[id]["term"] = l_line[7]
-                        cui = l_line[4]
-                        dd_description[id]["cui"] = cui
+                    id = l_line[0]
+                    dd_description[id] = dict()
+                    dd_description[id]["term"] = l_line[7]
+                    cui = l_line[4]
+                    dd_description[id]["cui"] = cui
 
-                        dd_sct[cui] = dict()
-                        dd_sct[cui]["tags"] = list()
-                        dd_sct[cui]["parents"] = list()
+                    dd_sct[cui] = dict()
+                    dd_sct[cui]["tags"] = list()
+                    dd_sct[cui]["parents"] = list()
 
 
             i+=1
@@ -315,9 +315,301 @@ def loader_all_random_cadec_folds(repPath):
 
 
 
-def loader_all_initial_cadec_folds(repPath):
+
+def correct_initial_cadec_2016(inputRep, outputRep):
+
+    for foldFileName in listdir(inputRep):
+        foldFilePath = join(inputRep, foldFileName)
+        with open(foldFilePath, 'r') as foldFile:
+
+            newFoldFilePath = join(outputRep, foldFileName)
+            with open(newFoldFilePath, 'w', encoding="utf8") as newFoldFile:
+
+                for line in foldFile:
+
+                    # 2 errors in the DICLOFENAC-SODIUM.7.ann file ('\t' replaced by many spaces...) in 2016 version:
+                    if foldFileName=="DICLOFENAC-SODIUM.7.ann":
+                        if line=="TT7     42399005 | Renal failure | 411 415;432 440     renal failure\n":
+                            newLine="TT7\t42399005 | Renal failure | 411 415;432 440\trenal failure\n"
+                            newFoldFile.write(newLine)
+                        elif line=="TT8     409622000 | Respiratory failure | 421 440     renal and respiratory failure \n":
+                            newLine="TT8\t409622000 | Respiratory failure | 421 440\trenal and respiratory failure\n"
+                            newFoldFile.write(newLine)
+                        else:
+                            newFoldFile.write(line)
+
+                    # 1 error in LIPITOR.484.ann (missing separator symbol...) in 2016 version:
+                    elif foldFileName == "LIPITOR.484.ann" and line == "TT3	76948002 | Severe pain | + 45326000 | Shoulder pain 78 119	severe intense left arm and shoulder pain\n":
+                        newFoldFile.write("TT3	76948002 | Severe pain | + 45326000 | Shoulder pain | 78 119	severe intense left arm and shoulder pain\n")
+
+                    # 1 error in LIPITOR.691.ann (missing separator symbol...) in 2016 version:
+                    elif foldFileName=="LIPITOR.691.ann" and line=="TT1	76948002 | Severe pain | + 57676002 Arthralgia |  0 18	extreme joint pain\n":
+                        newFoldFile.write("TT1	76948002 | Severe pain | + 57676002 | Arthralgia |  0 18	 extreme joint pain\n")
+
+                    # 1 error in LIPITOR.698.ann (missing separator symbol...) in 2016 version:
+                    elif foldFileName=="LIPITOR.698.ann" and line=="TT2	76948002 | Severe pain | + 57676002 Arthralgia |  43 72	extreme pain in all my joints\n":
+                        newFoldFile.write("TT2	76948002 | Severe pain | + 57676002 | Arthralgia |  43 72	extreme pain in all my joints\n")
+
+                    # 1 error in LIPITOR.772.ann (missing separator symbol...) in 2016 version:
+                    elif foldFileName == "LIPITOR.772.ann" and line == "TT1	76948002 | Severe pain |+ 288226003 | Myalgia/myositis - shoulder 0 34	severe muscle pain in my shoulders\n":
+                        newFoldFile.write("TT1	76948002 | Severe pain |+ 288226003 | Myalgia/myositis - shoulder | 0 34	severe muscle pain in my shoulders\n")
+
+                    # 3 errors in LIPITOR.6.ann (wrong CUI and missing separator...) in 2016 version:
+                    elif foldFileName=="LIPITOR.6.ann":
+                        if line=="TT10	81680008 | Neck pain | 514 518;539 543	pain neck\n":
+                            newLine="TT10	81680005 | Neck pain | 514 518;539 543	pain neck\n"
+                            newFoldFile.write(newLine)
+                        elif line=="TT14	81680008 | Neck pain | 838 842;866 870	pain neck\n":
+                            newLine="TT14	81680005 | Neck pain | 838 842;866 870	pain neck\n"
+                            newFoldFile.write(newLine)
+                        elif line=="TT7	76948002 | Severe pain |+ 288226003 | Myalgia/myositis - shoulder 440 458;459 487	severe pain in the muscles in the shoulder area\n":
+                            newLine="TT7	76948002 | Severe pain |+ 288226003 | Myalgia/myositis - shoulder | 440 458;459 487	severe pain in the muscles in the shoulder area\n"
+                            newFoldFile.write(newLine)
+                        else:
+                            newFoldFile.write(line)
+
+                    # 1 error in LIPITOR.511.ann (wrong CUI...) in 2016 version:
+                    elif foldFileName=="LIPITOR.511.ann" and line=="TT3	67849003 | Excruciating pain | + 20070731 | pain in lower limb |   38 66	excruciating pain in my legs\n":
+                        newFoldFile.write("TT3	67849003 | Excruciating pain | + 10601006 | pain in lower limb |   38 66	excruciating pain in my leg\n")
+
+                    # 2 errors in LIPITOR.496.ann (wrong CUI and missing separator symbol...) in 2016 version:
+                    elif foldFileName=="LIPITOR.496.ann" and line=="TT9	21499005|Feeling agitated 232 249	Severe aggitation\n":
+                        newFoldFile.write("TT9	24199005|Feeling agitated | 232 249	Severe aggitation\n")
+
+
+                    # Erasing of 3 ambiguous annotations:
+                    elif foldFileName == "ARTHROTEC.1.ann" and line == "TT6	102498003 | Agony | or 76948002|Severe pain| 260 265	agony\n":
+                        continue
+                    elif foldFileName == "ARTHROTEC.140.ann" and line == "TT3	102498003 | Agony | or 76948002|Severe pain| 261 266	agony\n":
+                        continue
+                    elif foldFileName == "ARTHROTEC.16.ann" and line == "TT8	102498003 | Agony | or 76948002|Severe pain| 73 78	agony\n":
+                        continue
+
+
+                    # 1 error in LIPITOR.574.ann (SCT-AU concept not in the "Clinical finding" <404684003> hierarchy as expected...) in 2016 version:
+                    # Applied solution: erase this exemple.
+                    elif foldFileName == "LIPITOR.574.ann" and line=="TT10	1806006 | Eruption | 431 445	Abdominal rash\n":
+                        continue
+
+                    # 1 error in LIPITOR.72.ann (SCT-AU concept not in the "Clinical finding" <404684003> hierarchy as expected...) in 2016 version:
+                    # Applied solution: erase this exemple.
+                    elif foldFileName == "LIPITOR.72.ann" and line=="TT9	183202003 | Shin splint | 168 190	felt like shin splints\n":
+                        continue
+
+                    # 3 errors in VOLTAREN-XR.3.ann (SCT-AU concept not in the "Clinical finding" <404684003> hierarchy as expected...) in 2016 version:
+                    # Applied solution: erase this exemple.
+                    # Including 2 wrong CUIs.
+                    elif foldFileName == "VOLTAREN-XR.3.ann":
+                        if line=="TT4	251377007 | Abdominal pressure | 428 446	abdominal pressure\n":
+                            continue
+                        elif line == "TT1	28551000168108 | Voltaren | 50 58	Voltaren\n":
+                            newFoldFile.write("TT1	3768011000036106 | Voltaren | 50 58	Voltaren\n")
+                        elif line == "TT7	28551000168108 | Voltaren | 896 904	Voltaren\n":
+                            newFoldFile.write("TT7	3768011000036106 | Voltaren | 896 904	Voltaren\n")
+                        else:
+                            newFoldFile.write(line)
+
+
+                    # 1 error in VOLTAREN.5.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.5.ann" and line=="TT2	13481000168104 | Panadeine | 130 139	panadeine\n":
+                        newFoldFile.write("TT2	3272011000036106 | Panadeine | 130 139	panadeine\n")
+
+                    # 1 error in LIPITOR.669.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "LIPITOR.669.ann" and line == "TT20	26171000168109 | Lasix | 418 423	lasix\n":
+                        newFoldFile.write("TT20	3215011000036108 | Lasix | 418 423	lasix\n")
+
+                    # 1 error in LIPITOR.779.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "LIPITOR.779.ann" and line == "TT8	26171000168109 | Lasix | 395 401	lasiks\n":
+                        newFoldFile.write("TT8	3215011000036108 | Lasix | 395 401	lasiks\n")
+
+                    # 1 error in LIPITOR.357.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "LIPITOR.357.ann" and line == "TT8	47401000168109 | Lescol | 658 664	Lescol\n":
+                        newFoldFile.write("TT8	3228011000036108 | Lescol | 658 664	Lescol\n")
+
+                    # 1 error in LIPITOR.592.ann (unknown CUI, seem to be wrong CUI for AMT, and wrong label):
+                    elif foldFileName == "LIPITOR.592.ann" and line == "TT16	45291000168107 | Efexor-XR | 289 296	Effexor\n":
+                        newFoldFile.write("TT16	3288011000036104 | Efexor-XR | 289 296	Efexor\n")
+
+                    # 1 error in DICLOFENAC-SODIUM.4.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "DICLOFENAC-SODIUM.4.ann" and line == "TT1	28551000168108 | Voltaren | 152 160	VOLTAREN\n":
+                        newFoldFile.write("TT1	3768011000036106 | Voltaren | 152 160	VOLTAREN\n")
+
+                    # 1 error in PENNSAID.1.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "PENNSAID.1.ann" and line == "TT1	28551000168108 | Voltaren | 397 405	voltaren\n":
+                        newFoldFile.write("TT1	3768011000036106 | Voltaren | 397 405	voltaren\n")
+
+                    # 1 error in VOLTAREN-XR.16.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN-XR.16.ann" and line == "TT1	28551000168108 | Voltaren | 202 210	voltaren\n":
+                        newFoldFile.write("TT1	3768011000036106 | Voltaren | 202 210	voltaren\n")
+
+                    # 1 error in VOLTAREN-XR.20.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN-XR.20.ann" and line == "TT4	28551000168108 | Voltaren | 17 28	Voltaren-XR\n":
+                        newFoldFile.write("TT4	3768011000036106 | Voltaren | 17 28	Voltaren-XR\n")
+
+                    # 2 errors in VOLTAREN-XR.5.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN-XR.5.ann":
+                        if line == "TT3	28551000168108 | Voltaren | 49 57	Voltaren\n":
+                            newFoldFile.write("TT3	3768011000036106 | Voltaren | 49 57	Voltaren\n")
+                        elif line == "TT5	28551000168108 | Voltaren | 301 309	voltaren\n":
+                            newFoldFile.write("TT5	3768011000036106 | Voltaren | 301 309	voltaren\n")
+                        else:
+                            newFoldFile.write(line)
+
+                    # 1 error in VOLTAREN.20.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.20.ann" and line == "TT1	28551000168108 | Voltaren | 84 92	Voltaren\n":
+                        newFoldFile.write("TT1	3768011000036106 | Voltaren | 84 92	Voltaren\n")
+
+                    # 3 errors in VOLTAREN-XR.21.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN-XR.21.ann":
+                        if line == "TT2	28551000168108 | Voltaren | 9 17	Voltaren\n":
+                            newFoldFile.write("TT2	3768011000036106 | Voltaren | 9 17	Voltaren\n")
+                        elif line == "TT8	28551000168108 | Voltaren | 386 394	Voltaren\n":
+                            newFoldFile.write("TT8	3768011000036106 | Voltaren | 386 394	Voltaren\n")
+                        elif line == "TT6	14351000168102 | Seroquel | 394 402	seroquel\n":
+                            newFoldFile.write("TT6	3110011000036101 | Seroquel | 394 402	seroquel\n")
+                        else:
+                            newFoldFile.write(line)
+
+                    # 2 errors in VOLTAREN.25.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.25.ann":
+                        if line == "TT7	28551000168108 | Voltaren | 20 28	voltaren\n":
+                            newFoldFile.write("TT7	3768011000036106 | Voltaren | 20 28	voltaren\n")
+                        elif line=="TT4	59781000168101 | Epipen Auto-Injector | 217 223	epipen\n":
+                            newFoldFile.write("TT4	32981011000036102 | Epipen Auto-Injector | 217 223	epipen\n")
+                        else:
+                            newFoldFile.write(line)
+
+                    # 1 error in VOLTAREN.26.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.26.ann" and line == "TT1	28551000168108 | Voltaren | 45 53	voltaren\n":
+                        newFoldFile.write("TT1	3768011000036106 | Voltaren | 45 53	voltaren\n")
+
+                    # 1 error in VOLTAREN.34.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.34.ann" and line == "TT7	28551000168108 | Voltaren | 375 383	Volteren\n":
+                        newFoldFile.write("TT7	3768011000036106 | Voltaren | 375 383	Volteren\n")
+
+                    # 1 error in VOLTAREN.37.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.37.ann" and line == "TT3	28551000168108 | Voltaren | 439 447	Voltaren\n":
+                        newFoldFile.write("TT3	3768011000036106 | Voltaren | 439 447	Voltaren\n")
+
+                    # 1 error in VOLTAREN.4.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.4.ann" and line == "TT2	28551000168108 | Voltaren | 52 60	voltaren\n":
+                        newFoldFile.write("TT2	3768011000036106 | Voltaren | 52 60	voltaren\n")
+
+                    # 4 errors in VOLTAREN.40.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.40.ann":
+                        if line == "TT4	28551000168108 | Voltaren | 63 71	voltaren\n":
+                            newFoldFile.write("TT4	3768011000036106 | Voltaren | 63 71	voltaren\n")
+                        elif line == "TT1	28551000168108 | Voltaren | 239 247	voltaren\n":
+                            newFoldFile.write("TT1	3768011000036106 | Voltaren | 239 247	voltaren\n")
+                        elif line == "TT14	28551000168108 | Voltaren | 336 344	Voltaren\n":
+                            newFoldFile.write("TT14	3768011000036106 | Voltaren | 336 344	Voltaren\n")
+                        elif line == "TT2	28551000168108 | Voltaren | 552 560	voltaren\n":
+                            newFoldFile.write("TT2	3768011000036106 | Voltaren | 552 560	voltaren\n")
+                        else:
+                            newFoldFile.write(line)
+
+                    # 1 error in VOLTAREN.46.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.46.ann" and line == "TT5	28551000168108 | Voltaren | 226 234	Voltaren\n":
+                        newFoldFile.write("TT5	3768011000036106 | Voltaren | 226 234	Voltaren\n")
+
+                    # 1 error in VOLTAREN.6.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.6.ann" and line == "TT1	28551000168108 | Voltaren | 327 335	voltaren\n":
+                        newFoldFile.write("TT1	3768011000036106 | Voltaren | 327 335	voltaren\n")
+
+                    # 1 error in VOLTAREN.7.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.7.ann" and line == "TT7	28551000168108 | Voltaren | 357 365	Voltaren\n":
+                        newFoldFile.write("TT7	3768011000036106 | Voltaren | 357 365	Voltaren\n")
+
+                    # 2 errors in VOLTAREN.8.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.8.ann":
+                        if line == "TT15	28551000168108 | Voltaren | 659 667	Voltaren\n":
+                            newFoldFile.write("TT15	3768011000036106 | Voltaren | 659 667	Voltaren\n")
+                        elif line == "TT16	28551000168108 | Voltaren | 735 743	Voltaren\n":
+                            newFoldFile.write("TT16	3768011000036106 | Voltaren | 735 743	Voltaren\n")
+                        else:
+                            newFoldFile.write(line)
+
+                    # 1 error in VOLTAREN.9.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.9.ann" and line == "TT2	28551000168108 | Voltaren | 98 106	Voltaren\n":
+                        newFoldFile.write("TT2	3768011000036106 | Voltaren | 98 106	Voltaren\n")
+
+                    # 1 error in VOLTAREN.19.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.19.ann" and line == "TT1	28551000168108 | Voltaren | 34 42	voltaren\n":
+                        newFoldFile.write("TT1	3768011000036106 | Voltaren | 34 42	voltaren\n")
+
+                    # 2 errors in VOLTAREN.21.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "VOLTAREN.21.ann":
+                        if line == "TT2	28551000168108 | Voltaren | 9 17	Voltaren\n":
+                            newFoldFile.write("TT2	3768011000036106 | Voltaren | 9 17	Voltaren\n")
+                        elif line == "TT8	28551000168108 | Voltaren | 386 394	Voltaren\n":
+                            newFoldFile.write("TT8	3768011000036106 | Voltaren | 386 394	Voltaren\n")
+                        else:
+                            newFoldFile.write(line)
+
+                    # 1 error in LIPITOR.331.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "LIPITOR.331.ann" and line == "TT6	25701000168107 | Enbrel | 156 173	Enbrel injections\n":
+                        newFoldFile.write("TT6	4368011000036108 | Enbrel | 156 173	Enbrel injections\n")
+
+                    # 1 error in ARTHROTEC.68.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "ARTHROTEC.68.ann" and line == "TT7	15611000168108 | Naprosyn | 562 570	Naprosyn\n":
+                        newFoldFile.write("TT7	2949011000036106 | Naprosyn | 562 570	Naprosyn\n")
+
+                    # 2 errors in LIPITOR.12.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "LIPITOR.12.ann":
+                        if line == "TT12	21290011000036100 | Testosterone | 419 431	testosterone\n":
+                            newFoldFile.write("TT12	21290011000036109 | Testosterone | 419 431	testosterone\n")
+                        elif line == "TT16	21290011000036100 | Testosterone | 550 562	testosterone\n":
+                            newFoldFile.write("TT16	21290011000036109 | Testosterone | 550 562	testosterone\n")
+                        else:
+                            newFoldFile.write(line)
+
+                    #  1 error in ARTHROTEC.129.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "ARTHROTEC.129.ann" and line == "TT3	2531000168109 | Andrews Tums Antacid | 30 34	Tums\n":
+                        newFoldFile.write("TT3	75947011000036105 | Andrews Tums Antacid | 30 34	Tums\n")
+
+                    # 1 error in ARTHROTEC.133.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "ARTHROTEC.133.ann" and line == "TT14	2531000168109 | Andrews Tums Antacid | 751 755	Tums\n":
+                        newFoldFile.write("TT14	75947011000036105 | Andrews Tums Antacid | 751 755	Tums\n")
+
+                    # 1 error in LIPITOR.546.ann (unknown CUI, seem to be wrong CUI for AMT):
+                    elif foldFileName == "LIPITOR.546.ann" and line == "TT29	31911000168108 | Rhinocort Aqueous | 1580 1589	Rhinocort\n":
+                        newFoldFile.write("TT29	39673011000036101 | Rhinocort Aqueous | 1580 1589	Rhinocort\n")
+
+                    # 1 error in VOLTAREN.10.ann (unknown CUI, not sure if it should be voltaren or a more specific product):
+                    # (+ modification of label in corpus)
+                    elif foldFileName == "VOLTAREN.10.ann" and line == "TT2	38181000168109 | Voltaren Emulgel | 76 88	Voltaren Gel\n":
+                        newFoldFile.write("TT2	3768011000036106 | Voltaren | 76 88	Voltaren Gel\n")
+
+                    # 1 error in LIPITOR.721.ann (unknown CUI, not sure if it should be voltaren or a more specific product):
+                    elif foldFileName == "LIPITOR.721.ann" and line == "TT4	3481000168101 | Nasonex Aqueous | 140 147	Nasonex\n":
+                        newFoldFile.write("TT4	39710011000036107 | Nasonex Aqueous | 140 147	Nasonex\n")
+
+                    # 1 error in VOLTAREN.25.ann (unknown CUI, not sure if it should be voltaren or a more specific product):
+                    elif foldFileName == "VOLTAREN.25.ann" and line == "TT12	21290011000036100 | Testosterone | 419 431	testosterone\n":
+                        continue
+
+                    # Next are wrong label errors in corpus (not a big problem, use the labels from the reference).
+                    # There are others (elements in list inverted, synonym rather that preferred term, label simplification, ...).
+                    # Here, it just corrects the really bad labelling (typos, failed parsing, ...).
+
+                    # 1 error in ARTHROTEC.137.ann (typo in label...) in 2016 version:
+                    elif foldFileName == "ARTHROTEC.137.ann" and line=="TT6	225014007 | Feeling empty |+ 271681002 | Stomch ache |  249 275	stomach emptiness and pain\n":
+                        newFoldFile.write("TT6	225014007 | Feeling empty |+ 271681002 | Stomach ache |  249 275	stomach emptiness and pain\n")
+
+                    # 1 error in ARTHROTEC.91.ann (wrong label...) in 2016 version:
+                    elif foldFileName == "ARTHROTEC.91.ann" and line=="TT2	31460011000036109  (substance) 34 46	acidophilous\n":
+                        newFoldFile.write("TT2	31460011000036109  lactobacillus acidophilus 34 46	acidophilous\n")
+
+                    else:
+                        newFoldFile.write(line)
+
+    print("Fixed Initial CADEC Corpus saved in", outputRep)
+
+
+
+def loader_all_initial_cadec_folds(repPath, originalRepPath):
     """
-    If alternative AND multi CUIs, it doesn't work (but seems it never happens).
+    # If alternative AND multi CUIs, it doesn't work (but seems it never happens).
     Idem with CONCEPT_LESS AND a CUI.
     """
     ddd_data = dict()
@@ -326,7 +618,7 @@ def loader_all_initial_cadec_folds(repPath):
     for foldFileName in listdir(repPath):
         foldFilePath = join(repPath, foldFileName)
 
-        with open(foldFilePath) as foldFile:
+        with open(foldFilePath, 'r', encoding="utf8") as foldFile:
 
             foldFileNameWithoutExt = splitext(foldFileName)[0]
             ddd_data[foldFileNameWithoutExt] = dict()
@@ -386,6 +678,7 @@ def loader_all_initial_cadec_folds(repPath):
                         l_label = [l_line[1].split()[1]]
                         mention = l_line[2].rstrip()
 
+
                 ddd_data[foldFileNameWithoutExt][exampleId]["mention"] = mention
                 ddd_data[foldFileNameWithoutExt][exampleId]["cui"] = l_cui
                 ddd_data[foldFileNameWithoutExt][exampleId]["label"] = l_label
@@ -393,9 +686,20 @@ def loader_all_initial_cadec_folds(repPath):
                 i += 1
 
 
+                # Find the type of mention in "original" directory of CADEC corpus:
+                foldFilePath = join(originalRepPath, foldFileName)
+                requestType = re.compile('^([a-zA-Z]+) .+')
+                with open(foldFilePath, 'r', encoding="utf8") as originalFile:
+                    for originalLine in originalFile:
+                        tid = 'T' + originalLine.split("\t")[0]
+                        currentTid= l_line[0]
+                        if tid == currentTid:
+                            mType = requestType.match(originalLine.split("\t")[1])
+                            if mType:
+                                type = mType.group(1)
+                                ddd_data[foldFileNameWithoutExt][exampleId]["type"] = type
+
     return ddd_data
-
-
 
 
 
@@ -917,7 +1221,7 @@ def check_if_cuis_arent_in_ref(s_cuis, dd_ref):
 # Test section
 #######################################################################################################
 if __name__ == '__main__':
-    """
+
     ################################################
     print("\n\n\nCADEC (3 datasets):\n")
     ################################################
@@ -939,10 +1243,9 @@ if __name__ == '__main__':
     dd_amt = loader_amt("../CADEC/AMT_v2.56/Uuid_sct_concepts_au.gov.nehta.amt.standalone_2.56.txt")
     print("loaded. (Nb of concepts in AMT =", len(dd_amt.keys()),", Nb of tags =", len(get_tags_in_ref(dd_amt)), ")")
 
-    print("\nExtracting sub- AMT:")
+    print("\nExtracting sub-AMT:")
     dd_subAmt = select_subpart_with_patterns_in_label(dd_amt)
     print("Done. (Nb of concepts in this subpart AMT =", len(dd_subAmt.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_subAmt)), ")")
-
 
     print("\nFusion SCT & AMT in one reference...")
     dd_ref = fusion_ref(dd_sct, dd_amt)
@@ -962,9 +1265,35 @@ if __name__ == '__main__':
 
 
     print("\n\nLoading initial CADEC corpus...")
-    ddd_data = loader_all_initial_cadec_folds("../CADEC/0_Original_CADEC/AMT-SCT/")
+    correct_initial_cadec_2016("../CADEC/0_Initial_CADEC/CADEC_2_2016/sct/", "../CADEC/4_MyCADEC/")
+    ddd_data = loader_all_initial_cadec_folds("../CADEC/4_MyCADEC/", "../CADEC/0_Initial_CADEC/CADEC_2_2016/original/")
+    dd_initCadecDrugs = extract_data(ddd_data, l_type=["Drug"])
+    dd_initCadecClinicalFindings = extract_data(ddd_data, l_type=["ADR", "Finding", "Disease", "Symptom"])
     dd_initCadec = extract_data_without_file(ddd_data)
     print("loaded.(Nb of mentions in initial CADEC =", len(dd_initCadec.keys()),")")
+    print("(Nb of drug mentions:", len(dd_initCadecDrugs.keys()), " ; Nb of clinical finding mentions:", len(dd_initCadecClinicalFindings.keys()), ")")
+
+    # NIL
+    nbDrugUC=0
+    nbClinicalFindingUC=0
+    for id in dd_initCadecDrugs.keys():
+        if dd_initCadecDrugs[id]["cui"] == ['CONCEPT_LESS']:
+            nbDrugUC+=1
+    for id in dd_initCadecClinicalFindings.keys():
+        if dd_initCadecClinicalFindings[id]["cui"] == ['CONCEPT_LESS']:
+            nbClinicalFindingUC+=1
+    print("(Nb of CONCEPT_LESS drug mentions:", nbDrugUC, " ; Nb of CONCEPT_LESS clinical finding mentions:", nbClinicalFindingUC, ")")
+
+    # Multi-normalization
+    nbDrugMul=0
+    nbClinicalFindingMul=0
+    for id in dd_initCadecDrugs.keys():
+        if len(dd_initCadecDrugs[id]["cui"]) > 1:
+            nbDrugMul+=1
+    for id in dd_initCadecClinicalFindings.keys():
+        if len(dd_initCadecClinicalFindings[id]["cui"]) > 1:
+            nbClinicalFindingMul+=1
+    print("(Nb of multi-normalized drug mentions:", nbDrugMul, " ; Nb of multi-normalized clinical finding mentions:", nbClinicalFindingMul, ")")
 
     print("\nLoading random CADEC corpus...")
     ddd_randData = loader_all_random_cadec_folds("../CADEC/1_Random_folds_AskAPatient/")
@@ -979,22 +1308,30 @@ if __name__ == '__main__':
 
     print("\n\nLoading cuis set in corpus...")
     s_cuisInInitCadec = get_cuis_set_from_corpus(dd_initCadec)
+    s_cuisInInitCadecDrugs = get_cuis_set_from_corpus(dd_initCadecDrugs)
+    s_cuisInInitCadecClinicalFindings = get_cuis_set_from_corpus(dd_initCadecClinicalFindings)
     s_cuisInRandCadec = get_cuis_set_from_corpus(dd_randCadec)
     s_cuisInCustomCadec = get_cuis_set_from_corpus(dd_customCadec)
     print("Loaded.(Nb of distinct used concepts in init/rand/custom =", len(s_cuisInInitCadec), len(s_cuisInRandCadec), len(s_cuisInCustomCadec),")")
+    print("(Nb of distinct used concepts in Drug type/CF type =", len(s_cuisInInitCadecDrugs), len(s_cuisInInitCadecClinicalFindings), ")")
 
 
     print("\n\nChecking:")
 
     print("\n\nChecking on full SCT and full AMT:")
     s_unknownCuisFromInit = check_if_cuis_arent_in_ref(s_cuisInInitCadec, dd_ref)
-    print("Unknown concepts in initial CADEC:", len(s_unknownCuisFromInit))
+    print("Unknown concepts in initial CADEC:", len(s_unknownCuisFromInit), s_unknownCuisFromInit)
     s_unknownCuisFromRand = check_if_cuis_arent_in_ref(s_cuisInRandCadec, dd_ref)
     print("Unknown concepts in random CADEC:", len(s_unknownCuisFromRand))
     s_unknownCuisFromCustom = check_if_cuis_arent_in_ref(s_cuisInCustomCadec, dd_ref)
     print("Unknown concepts in custom CADEC:", len(s_unknownCuisFromCustom))
     s_unknownCuisFromList = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_ref)
     print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromList))
+
+    s_unknownCuisFromInitDrugs = check_if_cuis_arent_in_ref(s_cuisInInitCadecDrugs, dd_subAmt)
+    print("Unknown Drug concepts in initial CADEC and subAMT:", len(s_unknownCuisFromInitDrugs), s_unknownCuisFromInitDrugs)
+    s_unknownCuisFromInitCF = check_if_cuis_arent_in_ref(s_cuisInInitCadecClinicalFindings, dd_subSct)
+    print("Unknown CF concepts in initial CADEC and subSCT:", len(s_unknownCuisFromInitCF), s_unknownCuisFromInitCF)
 
 
     print("\n\nChecking on subSCT and full AMT:")
@@ -1023,7 +1360,7 @@ if __name__ == '__main__':
     s_unknownCuisFromListSubSub = check_if_cuis_arent_in_ref(l_sctFromCadec, dd_subsubRef)
     print("Unknown concepts from [Miftahutdinov et al. 2019] list:", len(s_unknownCuisFromListSub))
 
-    print("Concepts in initial CADEC corpus which are not in th selected subpart of AMT (see select_subpart_with_patterns_in_label function):")
+    print("Concepts in initial CADEC corpus which are not in the selected subpart of AMT (see select_subpart_with_patterns_in_label function):")
     for cui in s_unknownCuisFromInitSubSub:
         if cui not in s_unknownCuisFromInitSub:
             print(cui, dd_ref[cui]["label"], end=", ")
@@ -1078,20 +1415,21 @@ if __name__ == '__main__':
     s_unknownHabCuisTrainDev = check_if_cuis_arent_in_ref(s_cuisHabTrainDev, dd_habObt)
     print("\nUnknown concepts in train/dev/train+dev hab corpora:", len(s_unknownHabCuisTrain),len(s_unknownHabCuisDev),len(s_unknownHabCuisTrainDev))
 
-    """
+
 
     ################################################
     print("\n\n\n\nNCBI:\n")
     ################################################
 
-    print("loading MEDIC...")
+    print("\nLoading MEDIC...")
     dd_medic = loader_medic("../NCBI/CTD_diseases_DNorm_v2012_07_6.tsv")
     print("loaded. (Nb of concepts in MEDIC =", len(dd_medic.keys()), ", Nb of tags =", len(get_tags_in_ref(dd_medic)), ")")
+    print("Note: Inconsistence errors in MEDIC -> MESH:D006938 = OMIM:144010 and MESH:C537710 = OMIM:153400.")
 
 
-    print("\nInitial NCBI Disease Corpus:\n")
+    print("\n\nInitial NCBI Disease Corpus:\n")
 
-    print("\nLoading NCBI corpora...")
+    print("Loading NCBI corpora...")
     ddd_dataFull = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt", "../NCBI/Voff/NCBIdevelopset_corpus.txt", "../NCBI/Voff/NCBItestset_corpus.txt"])
     dd_Full = extract_data(ddd_dataFull, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
     print("loaded.(Nb of mentions in full corpus =", len(dd_Full.keys()), ")")
@@ -1128,7 +1466,7 @@ if __name__ == '__main__':
     s_unknownNCBICuisDev = check_if_cuis_arent_in_ref(s_cuisNCBIDev, dd_medic)
     s_unknownNCBICuisTrainDev = check_if_cuis_arent_in_ref(s_cuisNCBITrainDev, dd_medic)
     s_unknownNCBICuisTest = check_if_cuis_arent_in_ref(s_cuisNCBITest, dd_medic)
-    print("\nUnknown concepts in Full/train/dev/train+dev/test NCBI folds:", len(s_unknownNCBICuisFull),len(s_unknownNCBICuisTrain),len(s_unknownNCBICuisDev),len(s_unknownNCBICuisTrainDev), len(s_unknownNCBICuisTest))
+    print("Unknown concepts in Full/train/dev/train+dev/test NCBI folds:", len(s_unknownNCBICuisFull),len(s_unknownNCBICuisTrain),len(s_unknownNCBICuisDev),len(s_unknownNCBICuisTrainDev), len(s_unknownNCBICuisTest))
     print("All Unknown concepts:", s_unknownNCBICuisFull)
 
 
@@ -1176,18 +1514,10 @@ if __name__ == '__main__':
     print("Loaded.(Nb of distinct used concepts in Full/train/dev/train+dev/test NCBI folds =", len(s_cuisNCBIFullFixed),len(s_cuisNCBITrainFixed),len(s_cuisNCBIDevFixed),len(s_cuisNCBITrainDevFixed),len(s_cuisNCBITestFixed),")")
 
 
-    print("\nLoading cuis set in corpus...")
-    s_cuisFixed = get_cuis_set_from_corpus(dd_FullFixed)
-    print("Loaded.(Nb of distinct used concepts in full corpus =", len(s_cuisFixed), ")")
-
-
     print("\nChecking:")
-    s_unknownCuisFixed = check_if_cuis_arent_in_ref(s_cuisFixed, dd_medic)
-    print("\nUnknown concepts in full NCBI corpus:", len(s_unknownCuisFixed))
+    s_unknownCuisFixed = check_if_cuis_arent_in_ref(s_cuisNCBIFullFixed, dd_medic)
+    print("Unknown concepts in full NCBI corpus:", len(s_unknownCuisFixed))
     print(s_unknownCuisFixed)
-
-
-
 
 
 
