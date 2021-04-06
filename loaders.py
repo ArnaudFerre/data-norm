@@ -133,6 +133,35 @@ def loader_snomed_ct_au(descriptionFilePath, languageFilePath, relationFilePath)
 
 
 
+def loader_clinical_finding_file(filePath):
+    dd_CF = dict()
+    i=0
+    with open(filePath, encoding="utf8") as file:
+        for line in file:
+
+            if i>0:
+                l_line = line.split('\t')
+
+                cui = l_line[0]
+                label = l_line[1]
+                l_parentCuis = l_line[2].split(' | ')
+
+                l_tags = list()
+                for tag in l_line[3].split(' | '):
+                    if tag != '\n':
+                        l_tags.append(tag.strip())
+
+                dd_CF[cui] = dict()
+                dd_CF[cui]["label"] = label
+                dd_CF[cui]["parents"] = l_parentCuis
+                if len(l_tags) > 0:
+                    dd_CF[cui]["tags"] = l_tags
+
+            i+=1
+
+    return dd_CF
+
+
 
 def loader_amt(filePath):
 

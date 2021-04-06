@@ -23,8 +23,10 @@ from numpy import std, median
 #######################################################################################################
 
 def accuracy(dd_pred, dd_resp):
-    score = 0.0
+    totalScore = 0.0
+
     for id in dd_resp.keys():
+        score = 0.0
         l_cuiPred = dd_pred[id]["pred_cui"]
         l_cuiResp = dd_resp[id]["cui"]
         if len(l_cuiPred) > 0:
@@ -32,8 +34,12 @@ def accuracy(dd_pred, dd_resp):
                 if cuiPred in l_cuiResp:
                     score+=1
             score=score/len(l_cuiResp) #multi-norm
-    score = score/len(dd_resp.keys())
-    return score
+
+        totalScore += score
+
+    totalScore = totalScore/len(dd_resp.keys())
+
+    return totalScore
 
 
 
