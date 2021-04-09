@@ -38,16 +38,20 @@ def ref_dict_to_obo(dd_ref, filePath):
             parents = ""
             if "parents" in dd_ref[cui].keys():
                 for parentCui in dd_ref[cui]["parents"]:
-                    parents+="is_a: "+parentCui+" ! "+dd_ref[parentCui]["label"]+"\n"
+                    if parentCui in dd_ref.keys():
+                        parents+="is_a: "+parentCui+" ! "+dd_ref[parentCui]["label"]+"\n"
 
-            conceptInfo = "[Term]\nid: "+cui+"\nname: "+dd_ref[cui]["label"]+"\n"+parents+"\n"
+            synonyms = ""
+            if "tags" in dd_ref[cui].keys():
+                for tag in dd_ref[cui]["tags"]:
+                    if tag!="":
+                        synonyms+='synonym: "'+tag+'" EXACT []\n'
+
+            conceptInfo = "[Term]\nid: "+cui+"\nname: "+dd_ref[cui]["label"]+"\n"+synonyms+parents+"\n"
 
             newFoldFile.write(conceptInfo)
 
-    print("Saved.")
-
-
-
+    print("Saved in", filePath,".")
 
 
 
@@ -98,5 +102,11 @@ if __name__ == '__main__':
     dd_subSct = loader_clinical_finding_file("../CADEC/clinicalFindingSubPart.csv")
     ref_dict_to_obo(dd_subSct, "../CADEC/clinicalFindingSubPart.obo")
 
-    
+    from loaders import loader_medic
+    dd_medic = loader_medic("../NCBI/CTD_diseases_DNorm_v2012_07_6.tsv")
+    ref_dict_to_obo(dd_medic, "../NCBI/CTD_diseases_DNorm_v2012_07_6.obo")
+
+
+    from pronto import Ontology
+    obo_medic = Ontology("../NCBI/CTD_diseases_DNorm_v2012_07_6.obo")
 

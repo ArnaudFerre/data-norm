@@ -12,6 +12,7 @@
 
 from nltk.stem import WordNetLemmatizer, PorterStemmer
 import sys
+import numpy
 
 
 
@@ -232,13 +233,96 @@ def by_heart_and_exact_matching(dd_mentions, dd_lesson, dd_ref):
 
 
 ##################################################
+def tfifd_ranking(dd_mentions, dd_ref):
+    dd_predictions = dict()
+    for id in dd_mentions.keys():
+        dd_predictions[id] = dict()
+
+    # Define the set of tokens:
+    l_vocab = list(get_vocab(l_folds=[dd_mentions], dd_reference=dd_ref))
+    size = len(l_vocab)
+
+    # Mentions vectors:
+    d_mentionVectors = dict()
+    for id in dd_mentions.keys():
+        d_mentionVectors[id] = numpy.zeros(size)
+        l_tokens = dd_mentions[id]["mention"].split()
+        for i, word in enumerate(l_vocab):
+            if word in l_tokens:
+                d_mentionVectors[id][i] = TF(word, l_tokens) * IDF(word, dd_ref)
+        d_mentionVectors[id] = d_mentionVectors[id] / numpy.linalg.norm(d_mentionVectors[id])
+
+    # Labels/tags vectors:
+    d_tagVectors = dict()
+    for cui in dd_ref.keys():
+        d_tagVectors[dd_ref[cui]["label"]] = numpy.zeros(size)
+        if "tags" in dd_ref[cui].keys():
+            for tag in  dd_ref[cui]["tags"]:
+                d_tagVectors[tag] = numpy.zeros(size)
+        l_tokens = dd_ref[cui]["label"].split()
+
+
+
+    return dd_predictions
 
 
 
 
 
-def pyDNorm():
+
+
+
+def pyDNorm(dd_train, dd_pred, dd_ref):
+    dd_predictions = dict()
+    for id in dd_pred.keys():
+        dd_predictions[id] = dict()
+
+    # Define the set of tokens:
+    l_vocab = list(get_vocab(l_folds=[dd_train, dd_pred], dd_reference=dd_ref))
+    size = len(l_vocab)
+
+    # Define training mentions vectors:
+    d_trainMentionVectors = dict()
+    for id in dd_train.keys():
+        d_trainMentionVectors[id] = numpy.zeros(size)
+        l_tokens = dd_train[id]["mention"].split()
+        for i, word in enumerate(l_vocab):
+            if word in l_tokens:
+                d_trainMentionVectors[id][i] = TF(word, l_tokens) * IDF(word, dd_ref)
+        d_trainMentionVectors[id] = d_trainMentionVectors[id] / numpy.linalg.norm(d_trainMentionVectors[id])
+
+
+    # Initializing the scores:
+    dd_scores = dict()
+    for id in dd_pred.keys():
+        dd_scores[dd_pred[id]["mention"]] = dict()
+        for cui in dd_ref.keys():
+            dd_scores[dd_pred[id]["mention"]][cui] = 0.0
+
+
+    # Training:
+    # Need PyTorch “margin ranking loss” to be optimized...
+
+    # Calculate score: (max of the score of all label/tags)
+
+
+    # Find the concept which has the label/tag with the highest score:
+    for id in dd_pred.keys():
+        mention = dd_pred[id]["mention"]
+        maxValue = 0
+        for cui in dd_scores[mention].keys():
+            if dd_scores[mention][cui] > maxValue:
+                maxValue = dd_scores[mention][cui]
+        for cui in dd_scores[mention].keys():
+            if dd_scores[mention][cui] == maxValue:
+                dd_predictions[id]["pred_cui"] = [cui]
+                break
+
     return None
+
+
+
+##################################################
 
 
 def sieve():
@@ -249,14 +333,14 @@ def sieve():
     return None
 
 
-def nultiCNN():
+def wordCNN():
     return None
 
 
 
 
 ###################################################
-# Tools:
+# Preprocessing tools:
 ###################################################
 
 def lowercaser_mentions(dd_mentions):
@@ -316,6 +400,79 @@ def stopword_filtering_mentions(dd_mentions):
     for id in dd_mentions.keys():
         dd_mentions[id]["mention"] = ps.stem(dd_mentions[id]["mention"].lower())
     return dd_mentions
+
+
+###################################################
+# Preprocessing tools:
+###################################################
+
+def get_vocab(l_folds=None, dd_reference=None):
+
+    if l_folds is None and dd_reference is None:
+        print("ERROR: give at least one between dd_mentions or dd_ref...")
+        sys.exit(0)
+
+    s_tokens = set()
+
+    if l_folds is not None:
+        for dd_data in l_folds:
+            for id in dd_data.keys():
+                l_mentionTokens = dd_data[id]["mention"].split()
+                for token in l_mentionTokens:
+                    s_tokens.add(token)
+
+    if dd_reference is not None:
+        for cui in dd_reference.keys():
+            l_labelTokens = dd_reference[cui]["label"].split()
+            for token in l_labelTokens:
+                s_tokens.add(token)
+            if "tags" in dd_reference[cui].keys():
+                for tag in dd_reference[cui]["tags"]:
+                    l_tagTokens = tag.split()
+                    for token in l_tagTokens:
+                        s_tokens.add(token)
+
+    return s_tokens
+
+
+def TF(token, l_tokens):
+    value=0
+    for elt in l_tokens:
+        if token == elt:
+            value+=1
+    return value
+
+
+def IDF(token, dd_ref):
+    value=0
+    nbOfTags=0
+    for cui in dd_ref.keys():
+        nbOfTags+=1
+        l_tokens = dd_ref[cui]["label"].split()
+        if token in l_tokens:
+            value+=1
+
+        if "tags" in dd_ref[cui].keys():
+            for tag in dd_ref[cui]["tags"]:
+                nbOfTags+=1
+                l_tokens = tag.split()
+                if token in l_tokens:
+                    value+=1
+
+    value = numpy.log( nbOfTags / (value+1) )
+
+    """
+        # Alternative calculation which consider IDF by concept and not names:
+        for cui in dd_ref.keys():
+        l_tokens.append(dd_ref[cui]["label"])
+        if "tags" in dd_ref[cui].keys():
+            for tag in dd_ref[cui]["tags"]:
+                l_tokens.append(tag)
+        if token in l_tokens:
+            value+=1
+    """
+    return value
+
 
 #######################################################################################################
 # Test section
@@ -510,6 +667,22 @@ if __name__ == '__main__':
     from evaluators import accuracy
 
 
+    print("DNorm method:")
+
+    dd_pyDNorm_predictions_customCADEC0_onTrain = pyDNorm(dd_customCADEC_train0_lowercased, dd_customCADEC_validation0_lowercased, dd_subsubRef_lowercased)
+
+
+
+
+
+
+
+
+
+
+    sys.exit(0)
+
+
     print("By heart learning method:")
 
     dd_predictions_customCADEC0_onTrain = optimized_by_heart_matcher(dd_customCADEC_train0_lowercased, dd_customCADEC_train0_lowercased)
@@ -606,6 +779,37 @@ if __name__ == '__main__':
     dd_predictions_randCADEC9_onVal = optimized_by_heart_matcher(dd_randCADEC_validation9_lowercased, dd_randCADEC_train9_lowercased)
     BHscoreRandCADEC9_onVal = accuracy(dd_predictions_randCADEC9_onVal, ddd_randData["AskAPatient.fold-9.validation"])
     print("\nBHscoreRandCADEC9_onVal:", BHscoreRandCADEC9_onVal)
+
+    dd_predictions_randCADEC0_onTest = optimized_by_heart_matcher(dd_randCADEC_test0_lowercased, dd_randCADEC_train0_lowercased)
+    BHscoreRandCADEC0_onTest = accuracy(dd_predictions_randCADEC0_onTest, ddd_randData["AskAPatient.fold-0.test"])
+    print("\n\nBHscoreRandCADEC0_onTest:", BHscoreRandCADEC0_onTest)
+    dd_predictions_randCADEC1_onTest = optimized_by_heart_matcher(dd_randCADEC_test1_lowercased, dd_randCADEC_train1_lowercased)
+    BHscoreRandCADEC1_onTest = accuracy(dd_predictions_randCADEC1_onTest, ddd_randData["AskAPatient.fold-1.test"])
+    print("\nBHscoreRandCADEC1_onTest:", BHscoreRandCADEC1_onTest)
+    dd_predictions_randCADEC2_onTest = optimized_by_heart_matcher(dd_randCADEC_test2_lowercased, dd_randCADEC_train2_lowercased)
+    BHscoreRandCADEC2_onTest = accuracy(dd_predictions_randCADEC2_onTest, ddd_randData["AskAPatient.fold-2.test"])
+    print("\nBHscoreRandCADEC2_onTest:", BHscoreRandCADEC2_onTest)
+    dd_predictions_randCADEC3_onTest = optimized_by_heart_matcher(dd_randCADEC_test3_lowercased, dd_randCADEC_train3_lowercased)
+    BHscoreRandCADEC3_onTest = accuracy(dd_predictions_randCADEC3_onTest, ddd_randData["AskAPatient.fold-3.test"])
+    print("\nBHscoreRandCADEC3_onTest:", BHscoreRandCADEC3_onTest)
+    dd_predictions_randCADEC4_onTest = optimized_by_heart_matcher(dd_randCADEC_test4_lowercased, dd_randCADEC_train4_lowercased)
+    BHscoreRandCADEC4_onTest = accuracy(dd_predictions_randCADEC4_onTest, ddd_randData["AskAPatient.fold-4.test"])
+    print("\nBHscoreRandCADEC4_onTest:", BHscoreRandCADEC4_onTest)
+    dd_predictions_randCADEC5_onTest = optimized_by_heart_matcher(dd_randCADEC_test5_lowercased, dd_randCADEC_train5_lowercased)
+    BHscoreRandCADEC5_onTest = accuracy(dd_predictions_randCADEC5_onTest, ddd_randData["AskAPatient.fold-5.test"])
+    print("\nBHscoreRandCADEC5_onTest:", BHscoreRandCADEC5_onTest)
+    dd_predictions_randCADEC6_onTest = optimized_by_heart_matcher(dd_randCADEC_test6_lowercased, dd_randCADEC_train6_lowercased)
+    BHscoreRandCADEC6_onTest = accuracy(dd_predictions_randCADEC6_onTest, ddd_randData["AskAPatient.fold-6.test"])
+    print("\nBHscoreRandCADEC6_onTest:", BHscoreRandCADEC6_onTest)
+    dd_predictions_randCADEC7_onTest = optimized_by_heart_matcher(dd_randCADEC_test7_lowercased, dd_randCADEC_train7_lowercased)
+    BHscoreRandCADEC7_onTest = accuracy(dd_predictions_randCADEC7_onTest, ddd_randData["AskAPatient.fold-7.test"])
+    print("\nBHscoreRandCADEC7_onTest:", BHscoreRandCADEC7_onTest)
+    dd_predictions_randCADEC8_onTest = optimized_by_heart_matcher(dd_randCADEC_test8_lowercased, dd_randCADEC_train8_lowercased)
+    BHscoreRandCADEC8_onTest = accuracy(dd_predictions_randCADEC8_onTest, ddd_randData["AskAPatient.fold-8.test"])
+    print("\nBHscoreRandCADEC8_onTest:", BHscoreRandCADEC8_onTest)
+    dd_predictions_randCADEC9_onTest = optimized_by_heart_matcher(dd_randCADEC_test9_lowercased, dd_randCADEC_train9_lowercased)
+    BHscoreRandCADEC9_onTest = accuracy(dd_predictions_randCADEC9_onTest, ddd_randData["AskAPatient.fold-9.test"])
+    print("\nBHscoreRandCADEC9_onTest:", BHscoreRandCADEC9_onTest)
 
 
     dd_predictions_BB4_onTrain = optimized_by_heart_matcher(dd_BB4habTrain_lowercased, dd_BB4habTrain_lowercased)
