@@ -10,11 +10,8 @@
 #######################################################################################################
 
 
-from os import listdir
-from os.path import isfile, join, splitext, basename
-import re
+from nltk.stem import WordNetLemmatizer, PorterStemmer
 import sys
-from numpy import std, median
 
 
 
@@ -105,8 +102,7 @@ def optimized_by_heart_matcher(dd_mentions, dd_lesson):
     return dd_predictions
 
 
-
-
+##################################################
 
 def exact_matcher(dd_mentions, dd_ref):
     """
@@ -174,29 +170,88 @@ def optimized_exact_matcher(dd_mentions, dd_ref):
     return dd_predictions
 
 
+##################################################
 
 
 
 
-###
-# Maybe improve all rule-based methods by adding training mentions in tags of concepts.
-###
+def by_heart_and_exact_matching(dd_mentions, dd_lesson, dd_ref):
+    dd_predictions = dict()
+
+    dd_allSurfaceForms = dict()
+
+    for cui in dd_ref.keys():
+        dd_allSurfaceForms[dd_ref[cui]["label"]] = dict()
+        if "tags" in dd_ref[cui].keys():
+            for tag in dd_ref[cui]["tags"]:
+                dd_allSurfaceForms[tag] = dict()
+
+    for cui in dd_ref.keys():
+        if cui in dd_allSurfaceForms[dd_ref[cui]["label"]].keys():
+            dd_allSurfaceForms[dd_ref[cui]["label"]][cui] += 1
+        else:
+            dd_allSurfaceForms[dd_ref[cui]["label"]][cui] = 0
+        if "tags" in dd_ref[cui].keys():
+            for tag in dd_ref[cui]["tags"]:
+                if cui in dd_allSurfaceForms[tag].keys():
+                    dd_allSurfaceForms[tag][cui] += 1
+                else:
+                    dd_allSurfaceForms[tag][cui] = 0
+
+
+    for id in dd_lesson.keys():
+        dd_allSurfaceForms[dd_lesson[id]["mention"]] = dict()
+
+    for id in dd_lesson.keys():
+        for cui in dd_lesson[id]["cui"]:
+            if cui in dd_allSurfaceForms[dd_lesson[id]["mention"]].keys():
+                dd_allSurfaceForms[dd_lesson[id]["mention"]][cui] += 1
+            else:
+                dd_allSurfaceForms[dd_lesson[id]["mention"]][cui] = 0
+
+
+    for id in dd_mentions.keys():
+        dd_predictions[id] = dict()
+        dd_predictions[id]["pred_cui"] = []
+    for i, id in enumerate(dd_mentions.keys()):
+        mention = dd_mentions[id]["mention"]
+        if mention in dd_allSurfaceForms.keys():
+            dd_predictions[id]["mention"] = mention
+            compt = 0
+            for possibleCui in dd_allSurfaceForms[mention].keys():
+                if dd_allSurfaceForms[mention][possibleCui] > compt:
+                    compt = dd_allSurfaceForms[mention][possibleCui]
+            for possibleCui in dd_allSurfaceForms[mention].keys():
+                if dd_allSurfaceForms[mention][possibleCui] == compt:
+                    dd_predictions[id]["pred_cui"] = [possibleCui]
+                    break
+
+
+    return dd_predictions
 
 
 
-def lemmes_exact_matcher():
-    return None
+##################################################
 
 
-def roots_exact_matcher():
+
+
+
+def pyDNorm():
     return None
 
 
 def sieve():
+    """
+    Description: Begin by by_heart_and_exact_matching(), then pyDNorm() on mentions without predictions.
+    :return:
+    """
     return None
 
-def pyDNorm():
+
+def nultiCNN():
     return None
+
 
 
 
@@ -209,7 +264,6 @@ def lowercaser_mentions(dd_mentions):
         dd_mentions[id]["mention"] = dd_mentions[id]["mention"].lower()
     return dd_mentions
 
-
 def lowercaser_ref(dd_ref):
     for cui in dd_ref.keys():
         dd_ref[cui]["label"] = dd_ref[cui]["label"].lower()
@@ -220,6 +274,48 @@ def lowercaser_ref(dd_ref):
             dd_ref[cui]["tags"] = l_lowercasedTags
     return dd_ref
 
+
+def lemmatize_lowercase_mentions(dd_mentions):
+    lemmatizer = WordNetLemmatizer()
+    for id in dd_mentions.keys():
+        dd_mentions[id]["mention"] = lemmatizer.lemmatize(dd_mentions[id]["mention"].lower())
+    return dd_mentions
+
+def lemmatize_lowercase_ref(dd_ref):
+    lemmatizer = WordNetLemmatizer()
+    for cui in dd_ref.keys():
+        dd_ref[cui]["label"] = lemmatizer.lemmatize(dd_ref[cui]["label"].lower())
+        if "tags" in dd_ref[cui].keys():
+            l_lowercasedTags = list()
+            for tag in dd_ref[cui]["tags"]:
+                l_lowercasedTags.append(lemmatizer.lemmatize(tag.lower()))
+            dd_ref[cui]["tags"] = l_lowercasedTags
+    return dd_ref
+
+
+def stem_lowercase_mentions(dd_mentions):
+    ps = PorterStemmer()
+    for id in dd_mentions.keys():
+        dd_mentions[id]["mention"] = ps.stem(dd_mentions[id]["mention"].lower())
+    return dd_mentions
+
+def stem_lowercase_ref(dd_ref):
+    ps = PorterStemmer()
+    for cui in dd_ref.keys():
+        dd_ref[cui]["label"] = ps.stem(dd_ref[cui]["label"].lower())
+        if "tags" in dd_ref[cui].keys():
+            l_lowercasedTags = list()
+            for tag in dd_ref[cui]["tags"]:
+                l_lowercasedTags.append(ps.stem(tag.lower()))
+            dd_ref[cui]["tags"] = l_lowercasedTags
+    return dd_ref
+
+
+def stopword_filtering_mentions(dd_mentions):
+    ps = PorterStemmer()
+    for id in dd_mentions.keys():
+        dd_mentions[id]["mention"] = ps.stem(dd_mentions[id]["mention"].lower())
+    return dd_mentions
 
 #######################################################################################################
 # Test section
@@ -343,67 +439,67 @@ if __name__ == '__main__':
     ################################################
 
     print("\nLowercase mentions datasets...")
-    dd_randCADEC_train0_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-0.train"])
-    dd_randCADEC_train1_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-1.train"])
-    dd_randCADEC_train2_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-2.train"])
-    dd_randCADEC_train3_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-3.train"])
-    dd_randCADEC_train4_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-4.train"])
-    dd_randCADEC_train5_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-5.train"])
-    dd_randCADEC_train6_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-6.train"])
-    dd_randCADEC_train7_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-7.train"])
-    dd_randCADEC_train8_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-8.train"])
-    dd_randCADEC_train9_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-9.train"])
+    dd_randCADEC_train0_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-0.train"])
+    dd_randCADEC_train1_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-1.train"])
+    dd_randCADEC_train2_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-2.train"])
+    dd_randCADEC_train3_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-3.train"])
+    dd_randCADEC_train4_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-4.train"])
+    dd_randCADEC_train5_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-5.train"])
+    dd_randCADEC_train6_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-6.train"])
+    dd_randCADEC_train7_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-7.train"])
+    dd_randCADEC_train8_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-8.train"])
+    dd_randCADEC_train9_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-9.train"])
 
-    dd_randCADEC_validation0_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-0.validation"])
-    dd_randCADEC_validation1_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-1.validation"])
-    dd_randCADEC_validation2_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-2.validation"])
-    dd_randCADEC_validation3_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-3.validation"])
-    dd_randCADEC_validation4_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-4.validation"])
-    dd_randCADEC_validation5_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-5.validation"])
-    dd_randCADEC_validation6_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-6.validation"])
-    dd_randCADEC_validation7_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-7.validation"])
-    dd_randCADEC_validation8_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-8.validation"])
-    dd_randCADEC_validation9_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-9.validation"])
+    dd_randCADEC_validation0_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-0.validation"])
+    dd_randCADEC_validation1_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-1.validation"])
+    dd_randCADEC_validation2_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-2.validation"])
+    dd_randCADEC_validation3_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-3.validation"])
+    dd_randCADEC_validation4_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-4.validation"])
+    dd_randCADEC_validation5_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-5.validation"])
+    dd_randCADEC_validation6_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-6.validation"])
+    dd_randCADEC_validation7_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-7.validation"])
+    dd_randCADEC_validation8_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-8.validation"])
+    dd_randCADEC_validation9_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-9.validation"])
 
-    dd_randCADEC_test0_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-0.test"])
-    dd_randCADEC_test1_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-1.test"])
-    dd_randCADEC_test2_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-2.test"])
-    dd_randCADEC_test3_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-3.test"])
-    dd_randCADEC_test4_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-4.test"])
-    dd_randCADEC_test5_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-5.test"])
-    dd_randCADEC_test6_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-6.test"])
-    dd_randCADEC_test7_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-7.test"])
-    dd_randCADEC_test8_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-8.test"])
-    dd_randCADEC_test9_lowercased = lowercaser_mentions(ddd_randData["AskAPatient.fold-9.test"])
+    dd_randCADEC_test0_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-0.test"])
+    dd_randCADEC_test1_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-1.test"])
+    dd_randCADEC_test2_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-2.test"])
+    dd_randCADEC_test3_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-3.test"])
+    dd_randCADEC_test4_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-4.test"])
+    dd_randCADEC_test5_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-5.test"])
+    dd_randCADEC_test6_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-6.test"])
+    dd_randCADEC_test7_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-7.test"])
+    dd_randCADEC_test8_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-8.test"])
+    dd_randCADEC_test9_lowercased = stem_lowercase_mentions(ddd_randData["AskAPatient.fold-9.test"])
 
-    dd_customCADEC_train0_lowercased = lowercaser_mentions(ddd_customData["train_0"])
-    dd_customCADEC_train1_lowercased = lowercaser_mentions(ddd_customData["train_1"])
-    dd_customCADEC_train2_lowercased = lowercaser_mentions(ddd_customData["train_2"])
-    dd_customCADEC_train3_lowercased = lowercaser_mentions(ddd_customData["train_3"])
-    dd_customCADEC_train4_lowercased = lowercaser_mentions(ddd_customData["train_4"])
+    dd_customCADEC_train0_lowercased = stem_lowercase_mentions(ddd_customData["train_0"])
+    dd_customCADEC_train1_lowercased = stem_lowercase_mentions(ddd_customData["train_1"])
+    dd_customCADEC_train2_lowercased = stem_lowercase_mentions(ddd_customData["train_2"])
+    dd_customCADEC_train3_lowercased = stem_lowercase_mentions(ddd_customData["train_3"])
+    dd_customCADEC_train4_lowercased = stem_lowercase_mentions(ddd_customData["train_4"])
 
-    dd_customCADEC_validation0_lowercased = lowercaser_mentions(ddd_customData["test_0"])
-    dd_customCADEC_validation1_lowercased = lowercaser_mentions(ddd_customData["test_1"])
-    dd_customCADEC_validation2_lowercased = lowercaser_mentions(ddd_customData["test_2"])
-    dd_customCADEC_validation3_lowercased = lowercaser_mentions(ddd_customData["test_3"])
-    dd_customCADEC_validation4_lowercased = lowercaser_mentions(ddd_customData["test_4"])
+    dd_customCADEC_validation0_lowercased = stem_lowercase_mentions(ddd_customData["test_0"])
+    dd_customCADEC_validation1_lowercased = stem_lowercase_mentions(ddd_customData["test_1"])
+    dd_customCADEC_validation2_lowercased = stem_lowercase_mentions(ddd_customData["test_2"])
+    dd_customCADEC_validation3_lowercased = stem_lowercase_mentions(ddd_customData["test_3"])
+    dd_customCADEC_validation4_lowercased = stem_lowercase_mentions(ddd_customData["test_4"])
 
-    dd_BB4habTrain_lowercased = lowercaser_mentions(dd_habTrain)
-    dd_BB4habDev_lowercased = lowercaser_mentions(dd_habDev)
+    dd_BB4habTrain_lowercased = stem_lowercase_mentions(dd_habTrain)
+    dd_BB4habDev_lowercased = stem_lowercase_mentions(dd_habDev)
 
-    dd_NCBITrainFixed_lowercased = lowercaser_mentions(dd_TrainFixed)
-    dd_NCBIDevFixed_lowercased = lowercaser_mentions(dd_DevFixed)
-    dd_NCBITrainDevFixed_lowercased = lowercaser_mentions(dd_TrainDevFixed)
-    dd_NCBITestFixed_lowercased = lowercaser_mentions(dd_TestFixed)
+    dd_NCBITrainFixed_lowercased = stem_lowercase_mentions(dd_TrainFixed)
+    dd_NCBIDevFixed_lowercased = stem_lowercase_mentions(dd_DevFixed)
+    dd_NCBITrainDevFixed_lowercased = stem_lowercase_mentions(dd_TrainDevFixed)
+    dd_NCBITestFixed_lowercased = stem_lowercase_mentions(dd_TestFixed)
 
 
     print("Mentions lowercasing done.\n")
 
 
     print("Lowercase references...")
-    dd_subsubRef_lowercased = lowercaser_ref(dd_subsubRef)
-    dd_habObt_lowercased = lowercaser_ref(dd_habObt)
-    dd_medic_lowercased = lowercaser_ref(dd_medic)
+    dd_subsubRef_lowercased = stem_lowercase_ref(dd_subsubRef)
+    dd_habObt_lowercased = stem_lowercase_ref(dd_habObt)
+    dd_medic_lowercased = stem_lowercase_ref(dd_medic)
     print("Done.")
 
 
@@ -412,6 +508,7 @@ if __name__ == '__main__':
     print("\n\n\n\nPREDICTING:\n")
     ################################################
     from evaluators import accuracy
+
 
     print("By heart learning method:")
 
@@ -523,7 +620,7 @@ if __name__ == '__main__':
 
     dd_predictions_NCBI_onTrain = optimized_by_heart_matcher(dd_NCBITrainFixed_lowercased, dd_NCBITrainFixed_lowercased)
     BHscore_NCBI_onTrain = accuracy(dd_predictions_NCBI_onTrain, dd_TrainFixed)
-    print("\nBHscore_NCBI_onTrain:", BHscore_NCBI_onTrain)
+    print("\n\nBHscore_NCBI_onTrain:", BHscore_NCBI_onTrain)
     dd_predictions_NCBI_onVal = optimized_by_heart_matcher(dd_NCBIDevFixed_lowercased, dd_NCBITrainFixed_lowercased)
     BHscore_NCBI_onVal = accuracy(dd_predictions_NCBI_onVal, dd_DevFixed)
     print("\nBHscore_NCBI_onVal:", BHscore_NCBI_onVal)
@@ -533,6 +630,7 @@ if __name__ == '__main__':
     dd_predictions_NCBI_onTest = optimized_by_heart_matcher(dd_NCBITestFixed_lowercased, dd_NCBITrainFixed_lowercased)
     BHscore_NCBI_onTest = accuracy(dd_predictions_NCBI_onTest, dd_TestFixed)
     print("\nBHscore_NCBI_onTest:", BHscore_NCBI_onTest)
+
 
 
     print("\n\n\nExact Matching method:\n")
@@ -688,156 +786,71 @@ if __name__ == '__main__':
 
 
 
+    print("\n\n\nExact Matching + By Heart method:\n")
 
 
+    dd_predictions_customCADEC0_onVal = by_heart_and_exact_matching(dd_customCADEC_validation0_lowercased, dd_customCADEC_train0_lowercased, dd_subsubRef)
+    BHEMscorecustomCADEC0_onVal = accuracy(dd_predictions_customCADEC0_onVal, ddd_customData["test_0"])
+    print("\n\nBHEMscorecustomCADEC0_onVal:", BHEMscorecustomCADEC0_onVal)
+    dd_predictions_customCADEC1_onVal = by_heart_and_exact_matching(dd_customCADEC_validation1_lowercased, dd_customCADEC_train1_lowercased, dd_subsubRef)
+    BHEMscorecustomCADEC1_onVal = accuracy(dd_predictions_customCADEC1_onVal, ddd_customData["test_1"])
+    print("\nBHEMscorecustomCADEC1_onVal:", BHEMscorecustomCADEC1_onVal)
+    dd_predictions_customCADEC2_onVal = by_heart_and_exact_matching(dd_customCADEC_validation2_lowercased, dd_customCADEC_train2_lowercased, dd_subsubRef)
+    BHEMscorecustomCADEC2_onVal = accuracy(dd_predictions_customCADEC2_onVal, ddd_customData["test_2"])
+    print("\nBHEMscorecustomCADEC2_onVal:", BHEMscorecustomCADEC2_onVal)
+    dd_predictions_customCADEC3_onVal = by_heart_and_exact_matching(dd_customCADEC_validation3_lowercased, dd_customCADEC_train3_lowercased, dd_subsubRef)
+    BHEMscorecustomCADEC3_onVal = accuracy(dd_predictions_customCADEC3_onVal, ddd_customData["test_3"])
+    print("\nBHEMscorecustomCADEC3_onVal:", BHEMscorecustomCADEC3_onVal)
+    dd_predictions_customCADEC4_onVal = by_heart_and_exact_matching(dd_customCADEC_validation4_lowercased, dd_customCADEC_train4_lowercased, dd_subsubRef)
+    BHEMscorecustomCADEC4_onVal = accuracy(dd_predictions_customCADEC4_onVal, ddd_customData["test_4"])
+    print("\nBHEMscorecustomCADEC4_onVal:", BHEMscorecustomCADEC4_onVal)
 
 
+    dd_BHEMpredictions_randCADEC0_onTest = by_heart_and_exact_matching(dd_randCADEC_test0_lowercased, dd_randCADEC_train0_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC0_onTest = accuracy(dd_BHEMpredictions_randCADEC0_onTest, ddd_randData["AskAPatient.fold-0.test"])
+    print("\n\nBHEMscoreRandCADEC0_onTest:", BHEMscoreRandCADEC0_onTest)
+    dd_BHEMpredictions_randCADEC1_onTest = by_heart_and_exact_matching(dd_randCADEC_test1_lowercased, dd_randCADEC_train1_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC1_onTest = accuracy(dd_BHEMpredictions_randCADEC1_onTest, ddd_randData["AskAPatient.fold-1.test"])
+    print("\nBHEMscoreRandCADEC1_onTest:", BHEMscoreRandCADEC1_onTest)
+    dd_BHEMpredictions_randCADEC2_onTest = by_heart_and_exact_matching(dd_randCADEC_test2_lowercased, dd_randCADEC_train2_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC2_onTest = accuracy(dd_BHEMpredictions_randCADEC2_onTest, ddd_randData["AskAPatient.fold-2.test"])
+    print("\nBHEMscoreRandCADEC2_onTest:", BHEMscoreRandCADEC2_onTest)
+    dd_BHEMpredictions_randCADEC3_onTest = by_heart_and_exact_matching(dd_randCADEC_test3_lowercased, dd_randCADEC_train3_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC3_onTest = accuracy(dd_BHEMpredictions_randCADEC3_onTest, ddd_randData["AskAPatient.fold-3.test"])
+    print("\nBHEMscoreRandCADEC3_onTest:", BHEMscoreRandCADEC3_onTest)
+    dd_BHEMpredictions_randCADEC4_onTest = by_heart_and_exact_matching(dd_randCADEC_test4_lowercased, dd_randCADEC_train4_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC4_onTest = accuracy(dd_BHEMpredictions_randCADEC4_onTest, ddd_randData["AskAPatient.fold-4.test"])
+    print("\nBHEMscoreRandCADEC4_onTest:", BHEMscoreRandCADEC4_onTest)
+    dd_BHEMpredictions_randCADEC5_onTest = by_heart_and_exact_matching(dd_randCADEC_test5_lowercased, dd_randCADEC_train5_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC5_onTest = accuracy(dd_BHEMpredictions_randCADEC5_onTest, ddd_randData["AskAPatient.fold-5.test"])
+    print("\nBHEMscoreRandCADEC5_onTest:", BHEMscoreRandCADEC5_onTest)
+    dd_BHEMpredictions_randCADEC6_onTest = by_heart_and_exact_matching(dd_randCADEC_test6_lowercased, dd_randCADEC_train6_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC6_onTest = accuracy(dd_BHEMpredictions_randCADEC6_onTest, ddd_randData["AskAPatient.fold-6.test"])
+    print("\nBHEMscoreRandCADEC6_onTest:", BHEMscoreRandCADEC6_onTest)
+    dd_BHEMpredictions_randCADEC7_onTest = by_heart_and_exact_matching(dd_randCADEC_test7_lowercased, dd_randCADEC_train7_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC7_onTest = accuracy(dd_BHEMpredictions_randCADEC7_onTest, ddd_randData["AskAPatient.fold-7.test"])
+    print("\nBHEMscoreRandCADEC7_onTest:", BHEMscoreRandCADEC7_onTest)
+    dd_BHEMpredictions_randCADEC8_onTest = by_heart_and_exact_matching(dd_randCADEC_test8_lowercased, dd_randCADEC_train8_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC8_onTest = accuracy(dd_BHEMpredictions_randCADEC8_onTest, ddd_randData["AskAPatient.fold-8.test"])
+    print("\nBHEMscoreRandCADEC8_onTest:", BHEMscoreRandCADEC8_onTest)
+    dd_BHEMpredictions_randCADEC9_onTest = by_heart_and_exact_matching(dd_randCADEC_test9_lowercased, dd_randCADEC_train9_lowercased, dd_subsubRef_lowercased)
+    BHEMscoreRandCADEC9_onTest = accuracy(dd_BHEMpredictions_randCADEC9_onTest, ddd_randData["AskAPatient.fold-9.test"])
+    print("\nBHEMscoreRandCADEC9_onTest:", BHEMscoreRandCADEC9_onTest)
 
 
-
-    sys.exit(0)
-
-    print("By heart learning method:")
-
-    print("Random CADEC (10 train-> 10 validation):\n")
-    dd_predictions_CADEC0 = by_heart_matcher(dd_randCADEC_train0_lowercased, dd_randCADEC_train0_lowercased)
-    dd_predictions_CADEC1 = by_heart_matcher(dd_randCADEC_train1_lowercased, dd_randCADEC_train1_lowercased)
-    dd_predictions_CADEC2 = by_heart_matcher(dd_randCADEC_train2_lowercased, dd_randCADEC_train2_lowercased)
-    dd_predictions_CADEC3 = by_heart_matcher(dd_randCADEC_train3_lowercased, dd_randCADEC_train3_lowercased)
-    dd_predictions_CADEC4 = by_heart_matcher(dd_randCADEC_train4_lowercased, dd_randCADEC_train4_lowercased)
-    dd_predictions_CADEC5 = by_heart_matcher(dd_randCADEC_train5_lowercased, dd_randCADEC_train5_lowercased)
-    dd_predictions_CADEC6 = by_heart_matcher(dd_randCADEC_train6_lowercased, dd_randCADEC_train6_lowercased)
-    dd_predictions_CADEC7 = by_heart_matcher(dd_randCADEC_train7_lowercased, dd_randCADEC_train7_lowercased)
-    dd_predictions_CADEC8 = by_heart_matcher(dd_randCADEC_train8_lowercased, dd_randCADEC_train8_lowercased)
-    dd_predictions_CADEC9 = by_heart_matcher(dd_randCADEC_train9_lowercased, dd_randCADEC_train9_lowercased)
-    print("\nCustom CADEC (5 train-> 5 validation):\n")
-    dd_predictions_customCADEC0 = by_heart_matcher(dd_customCADEC_train0_lowercased, dd_customCADEC_train0_lowercased)
-    dd_predictions_customCADEC1 = by_heart_matcher(dd_customCADEC_train1_lowercased, dd_customCADEC_train1_lowercased)
-    dd_predictions_customCADEC2 = by_heart_matcher(dd_customCADEC_train2_lowercased, dd_customCADEC_train2_lowercased)
-    dd_predictions_customCADEC3 = by_heart_matcher(dd_customCADEC_train3_lowercased, dd_customCADEC_train3_lowercased)
-    dd_predictions_customCADEC4 = by_heart_matcher(dd_customCADEC_train4_lowercased, dd_customCADEC_train4_lowercased)
-    print("\nBB4 (train->dev):\n")
-    dd_predictions_BB4 = by_heart_matcher(dd_BB4habTrain_lowercased, dd_BB4habTrain_lowercased)
-    print("\nNCBI (train->dev):\n")
-    dd_predictions_NCBI = by_heart_matcher(dd_NCBITrainFixed_lowercased, dd_NCBITrainFixed_lowercased)
-    print("\nPredicted.")
+    dd_predictions_BB4_onVal = by_heart_and_exact_matching(dd_BB4habDev_lowercased, dd_BB4habTrain_lowercased, dd_habObt_lowercased)
+    BHEMscore_BB4_onVal = accuracy(dd_predictions_BB4_onVal, dd_habDev)
+    print("\n\nBHEMscore_BB4_onVal:", BHEMscore_BB4_onVal)
 
 
-    print("\n\nExact Matching method:")
-
-    print("\nRandom CADEC (10 validation) EM:\n")
-    """
-    dd_EMpredictions_CADEC0 = exact_matcher(dd_randCADEC_train0_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC1 = exact_matcher(dd_randCADEC_train1_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC2 = exact_matcher(dd_randCADEC_train2_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC3 = exact_matcher(dd_randCADEC_train3_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC4 = exact_matcher(dd_randCADEC_train4_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC5 = exact_matcher(dd_randCADEC_train5_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC6 = exact_matcher(dd_randCADEC_train6_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC7 = exact_matcher(dd_randCADEC_train7_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC8 = exact_matcher(dd_randCADEC_train8_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_CADEC9 = exact_matcher(dd_randCADEC_train9_lowercased, dd_subsubRef_lowercased)
-    """
-    print("Custom CADEC (5 test) EM:\n")
-    dd_EMpredictions_customCADEC0 = exact_matcher(dd_customCADEC_train0_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_customCADEC1 = exact_matcher(dd_customCADEC_train1_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_customCADEC2 = exact_matcher(dd_customCADEC_train2_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_customCADEC3 = exact_matcher(dd_customCADEC_train3_lowercased, dd_subsubRef_lowercased)
-    dd_EMpredictions_customCADEC4 = exact_matcher(dd_customCADEC_train4_lowercased, dd_subsubRef_lowercased)
-    print("BB4 EM (dev):\n")
-    dd_EMpredictions_BB4 = exact_matcher(dd_BB4habTrain_lowercased, dd_habObt_lowercased)
-    print("NCBI (dev):\n")
-    dd_EMpredictions_NCBI = exact_matcher(dd_NCBITrainFixed_lowercased, dd_medic_lowercased)
-    print("\nPredicted.")
+    dd_predictions_NCBI_onTestWithTrainDev = by_heart_and_exact_matching(dd_NCBITestFixed_lowercased, dd_NCBITrainDevFixed_lowercased, dd_habObt_lowercased)
+    BHEMscore_NCBI_onTestWithTrainDev = accuracy(dd_predictions_NCBI_onTestWithTrainDev, dd_TestFixed)
+    print("\n\nBHEMscore_NCBI_onTestWithTrainDev:", BHEMscore_NCBI_onTestWithTrainDev)
+    dd_predictions_NCBI_onTest = by_heart_and_exact_matching(dd_NCBITestFixed_lowercased, dd_NCBITrainFixed_lowercased, dd_habObt_lowercased)
+    BHEMscore_NCBI_onTest = accuracy(dd_predictions_NCBI_onTest, dd_TestFixed)
+    print("\nBHEMscore_NCBI_onTest:", BHEMscore_NCBI_onTest)
 
 
-    ################################################
-    print("\n\n\n\nSCORING:\n")
-    ################################################
-    from evaluators import accuracy
-
-    scoreCADEC0 = accuracy(dd_predictions_CADEC0, dd_randCADEC_train0_lowercased)
-    scoreCADEC1 = accuracy(dd_predictions_CADEC1, dd_randCADEC_train1_lowercased)
-    scoreCADEC2 = accuracy(dd_predictions_CADEC2, dd_randCADEC_train2_lowercased)
-    scoreCADEC3 = accuracy(dd_predictions_CADEC3, dd_randCADEC_train3_lowercased)
-    scoreCADEC4 = accuracy(dd_predictions_CADEC4, dd_randCADEC_train4_lowercased)
-    scoreCADEC5 = accuracy(dd_predictions_CADEC5, dd_randCADEC_train5_lowercased)
-    scoreCADEC6 = accuracy(dd_predictions_CADEC6, dd_randCADEC_train6_lowercased)
-    scoreCADEC7 = accuracy(dd_predictions_CADEC7, dd_randCADEC_train7_lowercased)
-    scoreCADEC8 = accuracy(dd_predictions_CADEC8, dd_randCADEC_train8_lowercased)
-    scoreCADEC9 = accuracy(dd_predictions_CADEC9, dd_randCADEC_train9_lowercased)
-    scorecustomCADEC0 = accuracy(dd_predictions_customCADEC0, dd_customCADEC_train0_lowercased)
-    scorecustomCADEC1 = accuracy(dd_predictions_customCADEC1, dd_customCADEC_train1_lowercased)
-    scorecustomCADEC2 = accuracy(dd_predictions_customCADEC2, dd_customCADEC_train2_lowercased)
-    scorecustomCADEC3 = accuracy(dd_predictions_customCADEC3, dd_customCADEC_train3_lowercased)
-    scorecustomCADEC4 = accuracy(dd_predictions_customCADEC4, dd_customCADEC_train4_lowercased)
-    scoreBB4 = accuracy(dd_predictions_BB4, dd_BB4habTrain_lowercased)
-    scoreNCBI = accuracy(dd_predictions_NCBI, dd_NCBITrainFixed_lowercased)
-
-
-    """
-    EMscoreCADEC0 = accuracy(dd_EMpredictions_CADEC0, dd_randCADEC_validation0_lowercased)
-    EMscoreCADEC1 = accuracy(dd_EMpredictions_CADEC1, dd_randCADEC_validation1_lowercased)
-    EMscoreCADEC2 = accuracy(dd_EMpredictions_CADEC2, dd_randCADEC_validation2_lowercased)
-    EMscoreCADEC3 = accuracy(dd_EMpredictions_CADEC3, dd_randCADEC_validation3_lowercased)
-    EMscoreCADEC4 = accuracy(dd_EMpredictions_CADEC4, dd_randCADEC_validation4_lowercased)
-    EMscoreCADEC5 = accuracy(dd_EMpredictions_CADEC5, dd_randCADEC_validation5_lowercased)
-    EMscoreCADEC6 = accuracy(dd_EMpredictions_CADEC6, dd_randCADEC_validation6_lowercased)
-    EMscoreCADEC7 = accuracy(dd_EMpredictions_CADEC7, dd_randCADEC_validation7_lowercased)
-    EMscoreCADEC8 = accuracy(dd_EMpredictions_CADEC8, dd_randCADEC_validation8_lowercased)
-    EMscoreCADEC9 = accuracy(dd_EMpredictions_CADEC9, dd_randCADEC_validation9_lowercased)
-    """
-    EMscorecustomCADEC0 = accuracy(dd_EMpredictions_customCADEC0, dd_customCADEC_train0_lowercased)
-    EMscorecustomCADEC1 = accuracy(dd_EMpredictions_customCADEC1, dd_customCADEC_train1_lowercased)
-    EMscorecustomCADEC2 = accuracy(dd_EMpredictions_customCADEC2, dd_customCADEC_train2_lowercased)
-    EMscorecustomCADEC3 = accuracy(dd_EMpredictions_customCADEC3, dd_customCADEC_train3_lowercased)
-    EMscorecustomCADEC4 = accuracy(dd_EMpredictions_customCADEC4, dd_customCADEC_train4_lowercased)
-    EMscoreBB4 = accuracy(dd_EMpredictions_BB4, dd_BB4habTrain_lowercased)
-    EMscoreNCBI = accuracy(dd_EMpredictions_NCBI, dd_NCBITrainFixed_lowercased)
-
-
-    print("By heart learning method:")
-
-    print("AccuracyBH(CADEC0)=", scoreCADEC0)
-    print("AccuracyBH(CADEC1)=", scoreCADEC1)
-    print("AccuracyBH(CADEC2)=", scoreCADEC2)
-    print("AccuracyBH(CADEC3)=", scoreCADEC3)
-    print("AccuracyBH(CADEC4)=", scoreCADEC4)
-    print("AccuracyBH(CADEC5)=", scoreCADEC5)
-    print("AccuracyBH(CADEC6)=", scoreCADEC6)
-    print("AccuracyBH(CADEC7)=", scoreCADEC7)
-    print("AccuracyBH(CADEC8)=", scoreCADEC8)
-    print("AccuracyBH(CADEC9)=", scoreCADEC9)
-    print("\nAccuracyBH(CADEC0)=", scorecustomCADEC0)
-    print("AccuracyBH(CADEC1)=", scorecustomCADEC1)
-    print("AccuracyBH(CADEC2)=", scorecustomCADEC2)
-    print("AccuracyBH(CADEC3)=", scorecustomCADEC3)
-    print("AccuracyBH(CADEC4)=", scorecustomCADEC4)
-    print("\nAccuracyBH(BB4)=", scoreBB4)
-    print("\nAccuracyBH(NCBI)=", scoreNCBI)
-
-    print("\n\n")
-
-    print("Exact Matching method:")
-    """
-    print("AccuracyEM(CADEC0)=", EMscoreCADEC0)
-    print("AccuracyEM(CADEC1)=", EMscoreCADEC1)
-    print("AccuracyEM(CADEC2)=", EMscoreCADEC2)
-    print("AccuracyEM(CADEC3)=", EMscoreCADEC3)
-    print("AccuracyEM(CADEC4)=", EMscoreCADEC4)
-    print("AccuracyEM(CADEC5)=", EMscoreCADEC5)
-    print("AccuracyEM(CADEC6)=", EMscoreCADEC6)
-    print("AccuracyEM(CADEC7)=", EMscoreCADEC7)
-    print("AccuracyEM(CADEC8)=", EMscoreCADEC8)
-    print("AccuracyEM(CADEC9)=", EMscoreCADEC9)
-    """
-    print("\nAccuracyEM(CADEC0)=", EMscorecustomCADEC0)
-    print("AccuracyEM(CADEC1)=", EMscorecustomCADEC1)
-    print("AccuracyEM(CADEC2)=", EMscorecustomCADEC2)
-    print("AccuracyEM(CADEC3)=", EMscorecustomCADEC3)
-    print("AccuracyEM(CADEC4)=", EMscorecustomCADEC4)
-    print("\nAccuracyEM(BB4)=", EMscoreBB4)
-    print("\nAccuracyEM(NCBI)=", EMscoreNCBI)
 
 
 

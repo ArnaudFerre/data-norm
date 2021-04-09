@@ -23,6 +23,8 @@ import copy
 from numpy import std, median
 from pronto import Ontology
 
+from writers import write_ref
+
 
 
 
@@ -153,7 +155,8 @@ def loader_clinical_finding_file(filePath):
 
                 dd_CF[cui] = dict()
                 dd_CF[cui]["label"] = label
-                dd_CF[cui]["parents"] = l_parentCuis
+                if l_parentCuis != ['']:
+                    dd_CF[cui]["parents"] = l_parentCuis
                 if len(l_tags) > 0:
                     dd_CF[cui]["tags"] = l_tags
 
@@ -1134,50 +1137,6 @@ def select_subpart_with_patterns_in_label(dd_ref):
                     dd_subpart[cui]["tag"].append(tag)
 
     return dd_subpart
-
-
-
-
-
-
-
-
-def write_ref(dd_ref, filePath):
-
-    with open(filePath, 'w', encoding="utf8") as file:
-
-        line = "CUI" + "\t" + "label" + "\t" + "ParentsCUIs" + "\t" + "tags"  + "\n"
-        file.write(line)
-
-        for cui in dd_ref.keys():
-
-            lineLabel = ""
-            lineParents = ""
-            lineTags = ""
-
-            if "label" in dd_ref[cui].keys():
-                lineLabel = dd_ref[cui]["label"]
-
-            if "parents" in dd_ref[cui].keys():
-                for i, parentCui in enumerate(dd_ref[cui]["parents"]):
-                    if i == len(dd_ref[cui]["parents"])-1 :
-                        lineParents += parentCui
-                    else:
-                        lineParents += parentCui + " | "
-
-            if "tags" in dd_ref[cui].keys():
-                for i, tag in enumerate(dd_ref[cui]["tags"]):
-                    if i == len(dd_ref[cui]["tags"]) - 1:
-                        lineTags += tag
-                    else:
-                        lineTags += tag + " | "
-
-            line = cui + "\t" + lineLabel + "\t" + lineParents + "\t" + lineTags + "\n"
-
-            file.write(line)
-
-    print("Reference saved in", filePath)
-
 
 
 
