@@ -1179,6 +1179,15 @@ def extract_data_without_file(ddd_data):
 
 
 
+def get_subref_from_cui_set(s_cuis, dd_ref):
+    dd_localRef = dict()
+    for cui in s_cuis:
+        if cui in dd_ref:
+            dd_localRef[cui] = copy.deepcopy(dd_ref[cui])
+    return dd_localRef
+
+
+
 
 
 
