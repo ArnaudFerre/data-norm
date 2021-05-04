@@ -856,14 +856,14 @@ def loader_one_ncbi_fold(l_foldPath):
                     cuis = l_line[5].rstrip()
                     request11 = re.compile('.*\|.*')
                     request12 = re.compile('.*\+.*')
-                    if request11.match(cuis): #Maybe directly delete theses mentions...
-                        l_cuis = cuis.split('|')
-
-                        # The first CUI is choose;
-                        ddd_data[fileNameWithoutExt][exampleId]["cui"] = [l_cuis[0].strip()]
-
-                        # If supplementary CUIs are alternative CUIs (imply a kind of ambiguity...):
-                        ddd_data[fileNameWithoutExt][exampleId]["alt_cui"] = l_cuis[1:]
+                    if request11.match(cuis):
+                        #Composite mentions:
+                        if ddd_data[fileNameWithoutExt][exampleId]["type"] == "CompositeMention":
+                            l_cuis = cuis.split('|')
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
+                        else: # Composite mention which are not typed as CompositeMention?
+                            l_cuis = cuis.split('|')
+                            ddd_data[fileNameWithoutExt][exampleId]["cui"] = l_cuis
 
                     elif request12.match(cuis):
                         l_cuis = cuis.split('+') #multi-normalization
@@ -931,10 +931,34 @@ def replace_altCui_by_main_cui(s_unknownCuis, dd_medic, txtFileNCBI, fixedTxtFil
                     request12 = re.compile('.*\+.*')
 
 
-                    # Some CUIs are possible for correct prediction here (ambiguities... so erased):
+                    # Composite mentions (and ambiguities which are erased):
                     if request11.match(cuis):
-                        nbDeletions+=1
-                        continue
+                        if l_line[4] == "CompositeMention":
+                            l_cuis = cuis.split('|')
+                            toModify = False
+                            for k, cui in enumerate(l_cuis):
+                                for couple in lc_targetCuisAndToReplaceCuis:
+                                    if couple[1] == cui:
+                                        l_cuis[k] = couple[0]
+                                        toModify = True
+
+                            if toModify == True:
+                                newCuisInLine = ""
+                                for k, cui in enumerate(l_cuis):
+                                    if k == (len(l_cuis) - 1):
+                                        newCuisInLine = newCuisInLine + l_cuis[k]
+                                    else:
+                                        newCuisInLine = newCuisInLine + l_cuis[k] + '+'
+                                l_line[5] = newCuisInLine + '\n'
+
+                                for i, bloc in enumerate(l_line):
+                                    if i == (len(l_line) - 1):
+                                        newLine = newLine + bloc + '\n'
+                                    else:
+                                        newLine = newLine + bloc + '\t'
+                        else:
+                            nbDeletions+=1
+                            continue
 
 
                     # Multi-norm cases:
@@ -1164,7 +1188,7 @@ def extract_data(ddd_data, l_type=[]):
     for fileName in ddd_data.keys():
         for id in ddd_data[fileName].keys():
             if ddd_data[fileName][id]["type"] in l_type:
-                dd_data[id] = ddd_data[fileName][id]
+                dd_data[id] = copy.deepcopy(ddd_data[fileName][id])
 
     return dd_data
 

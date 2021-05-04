@@ -249,7 +249,7 @@ def embeddings_similarity_method_with_tags(dd_mentions, dd_ref, embeddings):
 
 
 # Embeddings+ML but take less RAM with big ref than WordCNN models:
-def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings):
+def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None):
 
     dd_predictions = dict()
     for id in dd_mentions.keys():
@@ -351,6 +351,33 @@ def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings):
     print("Done.\n")
 
 
+    # Subref use:
+    if dd_subRef is not None:
+        nbLabtags = 0
+        dd_conceptVectors = dict()
+        for cui in dd_subRef.keys():
+            dd_conceptVectors[cui] = dict()
+            dd_conceptVectors[cui][dd_subRef[cui]["label"]] = numpy.zeros(sizeVST)
+            nbLabtags += 1
+            if "tags" in dd_subRef[cui].keys():
+                for tag in dd_subRef[cui]["tags"]:
+                    nbLabtags += 1
+                    dd_conceptVectors[cui][tag] = numpy.zeros(sizeVST)
+        for cui in dd_subRef.keys():
+            l_tokens = dd_subRef[cui]["label"].split()
+            for token in l_tokens:
+                if token in embeddings.wv.vocab:
+                    dd_conceptVectors[cui][dd_subRef[cui]["label"]] += (
+                    embeddings[token] / numpy.linalg.norm(embeddings[token]))
+            if "tags" in dd_subRef[cui].keys():
+                for tag in dd_subRef[cui]["tags"]:
+                    l_currentTagTokens = tag.split()
+                    for currentToken in l_currentTagTokens:
+                        if currentToken in embeddings.wv.vocab:
+                            dd_conceptVectors[cui][tag] += (
+                            embeddings[currentToken] / numpy.linalg.norm(embeddings[currentToken]))
+
+
     # Nearest neighbours calculation:
     labtagsVectorMatrix = numpy.zeros((nbLabtags, sizeVST))
     i=0
@@ -393,13 +420,13 @@ def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings):
 ##################################################
 
 
-def sieve(dd_train, dd_mentions, dd_ref, embeddings):
+def sieve(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None):
     """
     Description: Begin by by_heart_and_exact_matching(), then dense_layer_method() on mentions without predictions.
     :return:
     """
 
-    dd_predMLE = dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings)
+    dd_predMLE = dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=dd_subRef)
 
     dd_mentions = stem_lowercase_mentions(dd_mentions)
     dd_train = stem_lowercase_mentions(dd_train)
