@@ -14,11 +14,12 @@ from nltk.stem import WordNetLemmatizer, PorterStemmer
 from tensorflow.keras import layers, models, Model, Input, regularizers, optimizers, metrics, losses, initializers, backend, callbacks, activations
 from gensim.models import KeyedVectors, Word2Vec
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import cosine, euclidean, cdist
 
 import sys
 import numpy
-from scipy.spatial.distance import cosine, euclidean, cdist
 import copy
+import json
 
 from loaders import loader_clinical_finding_file, loader_amt, select_subpart_with_patterns_in_label, get_tags_in_ref, fusion_ref, get_cui_list
 from loaders import extract_data_without_file, loader_all_initial_cadec_folds, loader_all_random_cadec_folds, loader_all_custom_cadec_folds
@@ -251,10 +252,18 @@ def embeddings_similarity_method_with_tags(dd_mentions, dd_ref, embeddings):
 # Embeddings+ML but take less RAM with big ref than WordCNN models:
 def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None):
 
-    dd_predictions = dict()
-    for id in dd_mentions.keys():
-        dd_predictions[id] = dict()
-        dd_predictions[id]["pred_cui"] = []
+    TFmodel = dense_layer_method_training(dd_train, dd_ref, embeddings)
+    if dd_subRef is not None:
+        dd_predictions = dense_layer_method_predicting(TFmodel, dd_mentions, dd_subRef, embeddings)
+    else:
+        dd_predictions = dense_layer_method_predicting(TFmodel, dd_mentions, dd_ref, embeddings)
+
+    return dd_predictions
+
+
+
+# Embeddings+ML but take less RAM with big ref than WordCNN models:
+def dense_layer_method_training(dd_train, dd_ref, embeddings, savePath=None):
 
     nbMentions = len(dd_train.keys())
     vocabSize = len(embeddings.wv.vocab)
@@ -326,6 +335,26 @@ def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None
     # plt.show()
     print("\nTraining done.\n")
 
+    # Saving model:
+    if savePath is not None:
+        CNNmodel.save(savePath)
+        print("TF model saved as .h5 at:", savePath)
+
+    return CNNmodel
+
+
+
+def dense_layer_method_predicting(model, dd_mentions, dd_ref, embeddings, savePredPath=None):
+
+    dd_predictions = dict()
+    for id in dd_mentions.keys():
+        dd_predictions[id] = dict()
+        dd_predictions[id]["pred_cui"] = []
+
+    vocabSize = len(embeddings.wv.vocab)
+    sizeVST = embeddings.wv.vector_size
+    sizeVSO = len(dd_ref.keys())
+    print("vocabSize:", vocabSize, "sizeVST:", sizeVST, "sizeVSO:", sizeVSO)
 
     # Mentions embeddings:
     print("Mentions embeddings...")
@@ -339,59 +368,58 @@ def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None
         d_mentionVectors[id] = d_mentionVectors[id] / len(l_tokens)
     print("Done.\n")
 
-
     # Prediction:
     print("Prediction...")
     Y_pred = numpy.zeros((len(dd_mentions.keys()), sizeVST))
     for i, id in enumerate(dd_mentions.keys()):
         x_test = numpy.zeros((1, sizeVST))
         x_test[0] = d_mentionVectors[id]
-        Y_pred[i] = CNNmodel.predict(x_test)[0]
+        Y_pred[i] = model.predict(x_test)[0]
     del d_mentionVectors
     print("Done.\n")
 
 
-    # Subref use:
-    if dd_subRef is not None:
-        nbLabtags = 0
-        dd_conceptVectors = dict()
-        for cui in dd_subRef.keys():
-            dd_conceptVectors[cui] = dict()
-            dd_conceptVectors[cui][dd_subRef[cui]["label"]] = numpy.zeros(sizeVST)
-            nbLabtags += 1
-            if "tags" in dd_subRef[cui].keys():
-                for tag in dd_subRef[cui]["tags"]:
-                    nbLabtags += 1
-                    dd_conceptVectors[cui][tag] = numpy.zeros(sizeVST)
-        for cui in dd_subRef.keys():
-            l_tokens = dd_subRef[cui]["label"].split()
-            for token in l_tokens:
-                if token in embeddings.wv.vocab:
-                    dd_conceptVectors[cui][dd_subRef[cui]["label"]] += (
-                    embeddings[token] / numpy.linalg.norm(embeddings[token]))
-            if "tags" in dd_subRef[cui].keys():
-                for tag in dd_subRef[cui]["tags"]:
-                    l_currentTagTokens = tag.split()
-                    for currentToken in l_currentTagTokens:
-                        if currentToken in embeddings.wv.vocab:
-                            dd_conceptVectors[cui][tag] += (
-                            embeddings[currentToken] / numpy.linalg.norm(embeddings[currentToken]))
+    # Calculating vector for (possibly new) reference:
+    # Build labels/tags embeddings from ref:
+    nbLabtags = 0
+    dd_conceptVectors = dict()
+    for cui in dd_ref.keys():
+        dd_conceptVectors[cui] = dict()
+        dd_conceptVectors[cui][dd_ref[cui]["label"]] = numpy.zeros(sizeVST)
+        nbLabtags += 1
+        if "tags" in dd_ref[cui].keys():
+            for tag in dd_ref[cui]["tags"]:
+                nbLabtags += 1
+                dd_conceptVectors[cui][tag] = numpy.zeros(sizeVST)
+    for cui in dd_ref.keys():
+        l_tokens = dd_ref[cui]["label"].split()
+        for token in l_tokens:
+            if token in embeddings.wv.vocab:
+                dd_conceptVectors[cui][dd_ref[cui]["label"]] += (
+                embeddings[token] / numpy.linalg.norm(embeddings[token]))
+        if "tags" in dd_ref[cui].keys():
+            for tag in dd_ref[cui]["tags"]:
+                l_currentTagTokens = tag.split()
+                for currentToken in l_currentTagTokens:
+                    if currentToken in embeddings.wv.vocab:
+                        dd_conceptVectors[cui][tag] += (
+                        embeddings[currentToken] / numpy.linalg.norm(embeddings[currentToken]))
 
 
     # Nearest neighbours calculation:
     labtagsVectorMatrix = numpy.zeros((nbLabtags, sizeVST))
-    i=0
+    i = 0
     for cui in dd_conceptVectors.keys():
         for labtag in dd_conceptVectors[cui].keys():
             labtagsVectorMatrix[i] = dd_conceptVectors[cui][labtag]
-            i+=1
+            i += 1
     print('\nMatrix of distance calculation...')
     scoreMatrix = cdist(Y_pred, labtagsVectorMatrix, 'cosine')
     for i, id in enumerate(dd_mentions.keys()):
         j = -1
         for cui in dd_conceptVectors.keys():
             for labtag in dd_conceptVectors[cui].keys():
-                j+=1
+                j += 1
                 scoreMatrix[i][j] = 1 - scoreMatrix[i][j]
     print("Done.\n")
 
@@ -403,7 +431,7 @@ def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None
             if stopSearch == True:
                 break
             for labtag in dd_conceptVectors[cui].keys():
-                j+=1
+                j += 1
                 if scoreMatrix[i][j] == maximumScore:
                     dd_predictions[id]["pred_cui"] = [cui]
                     stopSearch = True
@@ -411,27 +439,34 @@ def dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None
     del dd_conceptVectors
 
 
+    if savePredPath is not None:
+        with open(savePredPath, 'w') as fp:
+            json.dump(dd_conceptVectors, fp)
+            print("Predictions saved as .json at:", savePredPath)
+
     # Supprimer les mentions avec vecteur nul pour l'entrainement...?
-    # ToDo: Rendre la methode capable de ne faire que le train, que la pred, ou les 2.
 
     return dd_predictions
 
 
 ##################################################
 
-
-def sieve(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=None):
+def sieve(dd_train, dd_mentions, dd_trainingRef, embeddings, dd_subRef=None):
     """
     Description: Begin by by_heart_and_exact_matching(), then dense_layer_method() on mentions without predictions.
     :return:
     """
 
-    dd_predMLE = dense_layer_method(dd_train, dd_mentions, dd_ref, embeddings, dd_subRef=dd_subRef)
+    TFmodel = dense_layer_method_training(dd_train, dd_trainingRef, embeddings)
+    if dd_subRef is not None:
+        dd_predMLE = dense_layer_method_predicting(TFmodel, dd_mentions, dd_subRef, embeddings)
+    else:
+        dd_predMLE = dense_layer_method_predicting(TFmodel, dd_mentions, dd_trainingRef, embeddings)
 
     dd_mentions = stem_lowercase_mentions(dd_mentions)
     dd_train = stem_lowercase_mentions(dd_train)
-    dd_ref = stem_lowercase_ref(dd_ref)
-    dd_predBHEM = by_heart_and_exact_matching(dd_mentions, dd_train, dd_ref)
+    dd_stemAndLowercasedTrainingRef = stem_lowercase_ref(dd_trainingRef)
+    dd_predBHEM = by_heart_and_exact_matching(dd_mentions, dd_train, dd_stemAndLowercasedTrainingRef) # Is it relevant to use a different ref here?
 
     dd_sievePred = dict()
     for id in dd_mentions.keys():
