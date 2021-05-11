@@ -450,6 +450,26 @@ def extract_subref_from_cui_set(dd_ref, s_cuiSet):
 
 
 
+def add_tags_to_ref(dd_ref, dd_examples):
+    dd_bigRef = copy.deepcopy(dd_ref)
+
+    for id in dd_examples.keys():
+
+        for cui in dd_examples[id]["cui"]:
+            if cui in dd_bigRef.keys():
+                if "tags" not in dd_bigRef[cui].keys():
+                    dd_bigRef[cui]["tags"] = list()
+                if dd_examples[id]["mention"] not in dd_bigRef[cui]["tags"]:
+                    dd_bigRef[cui]["tags"].append(dd_examples[id]["mention"])
+
+            # wrong cui apparently, but adding it in the ref as a new concept:
+            else:
+                dd_bigRef[cui] = dict()
+                dd_bigRef[cui]["label"] = dd_examples[id]["mention"]
+
+    return dd_bigRef
+
+
 #######################################################################################################
 # Test section
 #######################################################################################################
@@ -472,32 +492,102 @@ if __name__ == '__main__':
     dd_trainDevExamples2 = biosyn_composite_adapter(dd_trainDevExamples)
     dd_testExamples2 = biosyn_composite_adapter(dd_testExamples)
 
+
     dd_biosyn_medic = adapt_ref_cuis(dd_medic)
     s_altAndMainCuis = get_all_cui_in_ref(dd_biosyn_medic)
 
     s_cuisNCBITrainDev = get_cuis_set_from_corpus(dd_trainDevExamples2)
     s_cuisNCBITest = get_cuis_set_from_corpus(dd_testExamples2)
+    s_cuisNCBIAll = set.union(s_cuisNCBITrainDev, s_cuisNCBITest)
+
     dd_trainDevMedic = extract_subref_from_cui_set(dd_biosyn_medic, s_cuisNCBITrainDev)
     dd_testMedic = extract_subref_from_cui_set(dd_biosyn_medic, s_cuisNCBITest)
+    dd_AllDatasetsMedic = extract_subref_from_cui_set(dd_biosyn_medic, s_cuisNCBIAll)
+
+    dd_TrainDevMedicMoreTrainDev_ref = add_tags_to_ref(dd_trainDevMedic, dd_trainDevExamples2)
+    dd_medicMoreTrainDev_ref = add_tags_to_ref(dd_biosyn_medic, dd_trainDevExamples2)
+    # Trop de triche ici! # dd_testMedicMoreTest_ref = add_tags_to_ref(dd_testMedic, dd_testExamples2)
+    # Trop de triche ici! # dd_trainDevTestMedicMoreTest_ref = add_tags_to_ref(dd_AllDatasetsMedic, dd_testExamples2)
+    dd_trainDevTestMedicMoreTrainDev_ref = add_tags_to_ref(dd_AllDatasetsMedic, dd_trainDevExamples2)
 
 
     from methods import sieve
     from gensim.models import KeyedVectors
     embeddings = KeyedVectors.load_word2vec_format('../PubMed-w2v.bin', binary=True)
 
+    # Sieve:
+    # normal (test CUIs only): 0.9364583333333333
+    # all (test CUIs only): 0.921875
+    # nearest (test CUIs only): 0.9322916666666666 (eucl) / 0.9427083333333334 (cos)
+    # nearest (cos) - train+dev+test CUIs only (pred): 0.8583333333333333 (TDT CUIs only for train or full+TD tags examples)
+    # nearest (cos) - full + TD tags (pred): 0.8333333333333334 (full+TD examples for train)
+    # nearest (cos) - full + TD tags (pred): 0.8291666666666667 (full examples for train)
+    # nearest (cos) - just full (pred): 0.8291666666666667 (full+TD examples for train)
+    # (with cheat as CADEC) nearest (cos) - full (pred):                        0.8291666666666667  (full+TD examples for train)
+    # (with cheat as CADEC) nearest (cos) - TDT CUIs only more TD tags (pred):  0.8479166666666667  (full+TD examples for train)
 
-    dd_pred = sieve(dd_badTrainDev, dd_testExamples2, dd_testMedic, embeddings)
-    #dd_pred = sieve(dd_trainDevExamples2, dd_testExamples2, dd_testMedic, embeddings)
-    print("dd_pred:", dd_pred)
-    dd_remergedPred = merge_composite_pred(dd_pred)
-    print("dd_remergedPred:", len(dd_remergedPred.keys()), dd_remergedPred)
-
-
-    BioSyn_score_NCBI_trainOnTest = biosyn_ncbi_accuracy(dd_remergedPred, dd_testExamples)
+    # BEST:
+    # (without cheat)       nearest (cos) - full + TD tags (pred):              0.834375            (full+TD examples for train)
+    # (with cheat as CADEC) nearest (cos) - TDT CUIs only (pred):               0.8583333333333333  (full+TD examples for train)
+    # (with big cheat)      nearest (cos) - T CUIs only (pred):                 0.8760416666666667  (full+TD examples for train)
+    """
+    dd_pred1 = sieve(dd_trainDevExamples2, dd_testExamples2, dd_medicMoreTrainDev_ref, embeddings, dd_subRef=dd_testMedic)
+    print("dd_pred:", dd_pred1)
+    dd_remergedPred1 = merge_composite_pred(dd_pred1)
+    print("dd_remergedPred:", len(dd_remergedPred1.keys()), dd_remergedPred1)
+    BioSyn_score_NCBI_trainOnTest = biosyn_ncbi_accuracy(dd_remergedPred1, dd_testExamples)
     print("\n\nBioSyn_score_NCBI_trainOnTest:", BioSyn_score_NCBI_trainOnTest)
 
+    dd_pred2 = sieve(dd_trainDevExamples2, dd_testExamples2, dd_medicMoreTrainDev_ref, embeddings, dd_subRef=dd_testMedic)
+    print("dd_pred:", dd_pred2)
+    dd_remergedPred2 = merge_composite_pred(dd_pred2)
+    print("dd_remergedPred:", len(dd_remergedPred2.keys()), dd_remergedPred2)
+    BioSyn_score_NCBI_trainOnTest = biosyn_ncbi_accuracy(dd_remergedPred2, dd_testExamples)
+    print("\n\nBioSyn_score_NCBI_trainOnTest:", BioSyn_score_NCBI_trainOnTest)
+
+    dd_pred3 = sieve(dd_trainDevExamples2, dd_testExamples2, dd_medicMoreTrainDev_ref, embeddings, dd_subRef=dd_testMedic)
+    print("dd_pred:", dd_pred3)
+    dd_remergedPred3 = merge_composite_pred(dd_pred3)
+    print("dd_remergedPred:", len(dd_remergedPred3.keys()), dd_remergedPred3)
+    BioSyn_score_NCBI_trainOnTest = biosyn_ncbi_accuracy(dd_remergedPred3, dd_testExamples)
+    print("\n\nBioSyn_score_NCBI_trainOnTest:", BioSyn_score_NCBI_trainOnTest)
+    """
+
+    ###################""
+
+    ddd_dataTrainDev = loader_one_ncbi_fold(["../NCBI/Voff/NCBItrainset_corpus.txt", "../NCBI/Voff/NCBIdevelopset_corpus.txt"])
+    dd_TrainDev = extract_data(ddd_dataTrainDev, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("loaded.(Nb of mentions in train+dev corpus =", len(dd_TrainDev.keys()), ")")
+
+    ddd_dataTest = loader_one_ncbi_fold(["../NCBI/Voff/NCBItestset_corpus.txt"])
+    dd_Test = extract_data(ddd_dataTest, l_type=['CompositeMention', 'Modifier', 'SpecificDisease', 'DiseaseClass'])
+    print("loaded.(Nb of mentions in test corpus =", len(dd_Test.keys()), ")")
 
 
+    s_cuisNCBITrainDev = get_cuis_set_from_corpus(dd_TrainDev)
+    s_cuisNCBITest = get_cuis_set_from_corpus(dd_Test)
+    s_cuisNCBIAll = set.union(s_cuisNCBITrainDev, s_cuisNCBITest)
+
+    dd_trainDevMedic = extract_subref_from_cui_set(dd_medic, s_cuisNCBITrainDev)
+    dd_testMedic = extract_subref_from_cui_set(dd_medic, s_cuisNCBITest)
+    dd_AllDatasetsMedic = extract_subref_from_cui_set(dd_medic, s_cuisNCBIAll)
+
+    dd_TrainDevMedicMoreTrainDev_ref = add_tags_to_ref(dd_medic, dd_TrainDev)
+
+
+    dd_pred1 = sieve(dd_TrainDev, dd_Test, dd_TrainDevMedicMoreTrainDev_ref, embeddings, dd_subRef=dd_testMedic)
+    BioSyn_score_NCBI_trainOnTest = accuracy(dd_pred1, dd_Test)
+    print("\n\nBioSyn_score_NCBI_trainOnTest:", BioSyn_score_NCBI_trainOnTest)
+
+    dd_pred2 = sieve(dd_TrainDev, dd_Test, dd_TrainDevMedicMoreTrainDev_ref, embeddings, dd_subRef=dd_testMedic)
+    BioSyn_score_NCBI_trainOnTest = accuracy(dd_pred2, dd_Test)
+    print("\n\nBioSyn_score_NCBI_trainOnTest:", BioSyn_score_NCBI_trainOnTest)
+
+    dd_pred3 = sieve(dd_TrainDev, dd_Test, dd_TrainDevMedicMoreTrainDev_ref, embeddings, dd_subRef=dd_testMedic)
+    BioSyn_score_NCBI_trainOnTest = accuracy(dd_pred3, dd_Test)
+    print("\n\nBioSyn_score_NCBI_trainOnTest:", BioSyn_score_NCBI_trainOnTest)
+
+    # 0.7800347222222223
 
     sys.exit(0)
     """
